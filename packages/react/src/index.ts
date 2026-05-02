@@ -51,6 +51,7 @@ export { LiveButton, type LiveButtonProps } from './ui/live-button/live-button';
 export { MuteButton, type MuteButtonProps } from './ui/mute-button/mute-button';
 export { PiPButton, type PiPButtonProps } from './ui/pip-button/pip-button';
 export { PipOverlay, type PipOverlayProps } from './ui/pip-overlay/pip-overlay';
+export { PipOverlaySourceButton } from './ui/pip-overlay/pip-overlay-source-button';
 export { PipOverlayToggle, type PipOverlayToggleProps } from './ui/pip-overlay/pip-overlay-toggle';
 export { PipSource, type PipSourceProps } from './ui/pip-overlay/pip-source';
 export { usePipOverlay } from './ui/pip-overlay/use-pip-overlay';

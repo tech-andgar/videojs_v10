@@ -125,6 +125,11 @@ function getTemplateHTML() {
             </media-pip-overlay-toggle>
             <media-tooltip id="pip-overlay-tooltip" side="top" class="media-surface media-tooltip"></media-tooltip>
 
+            <media-pip-overlay-source-button commandfor="pip-source-tooltip" class="media-button media-button--subtle media-button--icon media-button--pip-source">
+              ${renderIcon('playback-rate', { class: 'media-icon' })}
+            </media-pip-overlay-source-button>
+            <media-tooltip id="pip-source-tooltip" side="top" class="media-surface media-tooltip">Switch Source</media-tooltip>
+
             <media-pip-button commandfor="pip-tooltip" class="media-button media-button--subtle media-button--icon media-button--pip">
               ${renderIcon('pip-enter', { class: 'media-icon media-icon--pip-enter' })}
               ${renderIcon('pip-exit', { class: 'media-icon media-icon--pip-exit' })}

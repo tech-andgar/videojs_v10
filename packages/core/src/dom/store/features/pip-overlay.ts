@@ -79,6 +79,16 @@ export const pipOverlayFeature = definePlayerFeature({
       }
     },
 
+    setPipOverlaySrc(src) {
+      const state = get() as unknown as MediaPipOverlayState;
+      const source = state.pipOverlaySources.find((s) => s.src === src);
+      if (source) {
+        set({ pipOverlaySrc: src, pipOverlayLang: source.lang || null });
+      } else {
+        set({ pipOverlaySrc: src, pipOverlayLang: null });
+      }
+    },
+
     addPipOverlaySource(source) {
       const state = get() as unknown as MediaPipOverlayState;
       if (!state.pipOverlaySources.some((s) => s.src === source.src)) {

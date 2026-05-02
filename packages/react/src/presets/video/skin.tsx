@@ -30,7 +30,7 @@ import { Gesture } from '@/ui/gesture/gesture';
 import { Hotkey } from '@/ui/hotkey/hotkey';
 import { MuteButton } from '@/ui/mute-button';
 import { PiPButton } from '@/ui/pip-button';
-import { PipOverlay, PipOverlayToggle } from '@/ui/pip-overlay';
+import { PipOverlay, PipOverlaySourceButton, PipOverlayToggle } from '@/ui/pip-overlay';
 import { PlayButton } from '@/ui/play-button';
 import { PlaybackRateButton } from '@/ui/playback-rate-button';
 import { Popover } from '@/ui/popover';
@@ -231,6 +231,11 @@ export function VideoSkin(props: VideoSkinProps): ReactNode {
                 }
               />
               <Tooltip.Popup className="media-surface media-tooltip" />
+            </Tooltip.Root>
+
+            <Tooltip.Root side="top">
+              <Tooltip.Trigger render={<PipOverlaySourceButton />} />
+              <Tooltip.Popup className="media-surface media-tooltip">Switch Source</Tooltip.Popup>
             </Tooltip.Root>
 
             <Tooltip.Root side="top">

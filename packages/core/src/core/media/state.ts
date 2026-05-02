@@ -382,8 +382,9 @@ export interface MediaPipOverlayState {
   setPipOverlayPosition(x: number, y: number): void;
   setPipOverlayScale(scale: number): void;
   setPipOverlaySources(sources: PipOverlaySource[]): void;
-  /** Set the current language and source for the PIP overlay. */
   setPipOverlayLang(lang: string | null): void;
+  /** Set the current source URL for the PIP overlay. */
+  setPipOverlaySrc(src: string): void;
 
   /** Add a source to the PIP overlay (for dynamic registration). */
   addPipOverlaySource(source: PipOverlaySource): void;
