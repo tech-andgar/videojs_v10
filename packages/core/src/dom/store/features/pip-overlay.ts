@@ -6,6 +6,17 @@ import { isMediaPauseCapable, isMediaPlaybackRateCapable, isMediaSeekCapable } f
 
 export const PIP_OVERLAY_MEDIA_SYMBOL = Symbol('@videojs/pip-overlay-media');
 
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'blob:']);
+
+function isAllowedSrc(src: string): boolean {
+  try {
+    const url = new URL(src, globalThis.location?.href);
+    return ALLOWED_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
 export const pipOverlayFeature = definePlayerFeature({
   name: 'pip-overlay',
 
@@ -26,6 +37,11 @@ export const pipOverlayFeature = definePlayerFeature({
       const state = get() as unknown as MediaPipOverlayState;
       const resolved = src ?? state.pipOverlaySrc ?? state.pipOverlaySources[0]?.src ?? null;
       if (resolved) {
+        if (!isAllowedSrc(resolved)) {
+          if (__DEV__) console.warn(`[pip-overlay] Blocked unsafe src: ${resolved}`);
+          set({ pipOverlayError: 'Invalid source URL' });
+          return;
+        }
         set({ pipOverlayActive: true, pipOverlaySrc: resolved, pipOverlayError: null });
       }
     },
@@ -54,10 +70,14 @@ export const pipOverlayFeature = definePlayerFeature({
     },
 
     setPipOverlaySources(sources) {
-      set({ pipOverlaySources: sources });
+      const safe = sources.filter((s) => isAllowedSrc(s.src));
+      if (__DEV__ && safe.length < sources.length) {
+        console.warn('[pip-overlay] Filtered unsafe source URLs');
+      }
+      set({ pipOverlaySources: safe });
       const state = get() as unknown as MediaPipOverlayState;
-      if (!state.pipOverlaySrc && sources.length > 0 && sources[0]) {
-        set({ pipOverlaySrc: sources[0].src });
+      if (!state.pipOverlaySrc && safe.length > 0 && safe[0]) {
+        set({ pipOverlaySrc: safe[0].src });
       }
     },
 
@@ -169,7 +189,8 @@ export const pipOverlayFeature = definePlayerFeature({
       'seeked',
       () => {
         const pip = getPipMedia();
-        if (pip) pip.currentTime = media.currentTime;
+        const state = get() as unknown as MediaPipOverlayState;
+        if (pip && state.pipOverlayActive) pip.currentTime = media.currentTime;
       },
       { signal }
     );
