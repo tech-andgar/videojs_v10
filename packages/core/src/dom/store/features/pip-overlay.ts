@@ -1,4 +1,4 @@
-import { listen } from '@videojs/utils/dom';
+import { isRTL, listen } from '@videojs/utils/dom';
 
 import type { MediaPipOverlayState } from '../../../core/media/state';
 import { definePlayerFeature } from '../../feature';
@@ -109,14 +109,25 @@ export const pipOverlayFeature = definePlayerFeature({
       return;
     }
 
+    // Flip default position for RTL
+    if (isRTL(container)) {
+      const { pipOverlayPosition } = get() as unknown as MediaPipOverlayState;
+      if (pipOverlayPosition.x === 0.78) {
+        set({ pipOverlayPosition: { x: 0.22, y: pipOverlayPosition.y } });
+      }
+    }
+
     const getPipMedia = (): HTMLVideoElement | null =>
       (container as unknown as Record<symbol, unknown>)[PIP_OVERLAY_MEDIA_SYMBOL] as HTMLVideoElement | null;
+
+    const isLive = () => !isFinite(media.duration);
 
     // --- Soft Sync Logic ---
     const syncTime = () => {
       const pip = getPipMedia();
       const state = get() as unknown as MediaPipOverlayState;
       if (!pip || !state.pipOverlayActive || !isMediaPlaybackRateCapable(media)) return;
+      if (isLive()) return; // Skip drift sync for live streams
 
       const drift = pip.currentTime - media.currentTime;
       const absDrift = Math.abs(drift);
@@ -190,7 +201,7 @@ export const pipOverlayFeature = definePlayerFeature({
       () => {
         const pip = getPipMedia();
         const state = get() as unknown as MediaPipOverlayState;
-        if (pip && state.pipOverlayActive) pip.currentTime = media.currentTime;
+        if (pip && state.pipOverlayActive && !isLive()) pip.currentTime = media.currentTime;
       },
       { signal }
     );
