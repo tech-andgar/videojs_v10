@@ -1,6 +1,6 @@
 # PIP Overlay Implementation Plan
 
-**Status:** IN_PROGRESS
+**Status:** COMPLETED
 
 Implementation plan for a custom draggable PIP overlay with synchronized time controls.
 
@@ -121,15 +121,15 @@ The feature reads it during sync events.
 | 7 | CSS Styles | `@videojs/skins` | 1 | `[x]` |
 | 8 | HTML Skin Integration | `@videojs/html` | 2 | `[x]` |
 | 9 | HTML Package Exports | `@videojs/html` | 1 | `[x]` |
-| 10 | React PipOverlay Component | `@videojs/react` | 1 | `[ ]` |
-| 11 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[ ]` |
-| 12 | React usePipOverlay Hook | `@videojs/react` | 1 | `[ ]` |
-| 13 | React Skin Integration | `@videojs/react` | 1 | `[ ]` |
-| 14 | React Package Exports | `@videojs/react` | 1 | `[ ]` |
-| 15 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
-| 16 | React Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
+| 10 | React PipOverlay Component | `@videojs/react` | 1 | `[x]` |
+| 11 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[x]` |
+| 12 | React usePipOverlay Hook | `@videojs/react` | 1 | `[x]` |
+| 13 | React Skin Integration | `@videojs/react` | 1 | `[x]` |
+| 14 | React Package Exports | `@videojs/react` | 1 | `[x]` |
+| 15 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[x]` |
+| 16 | React Sandbox Demo | `apps/sandbox` | 2 | `[x]` |
 | 17 | Unit Tests | `@videojs/core` | 1 | `[x]` |
-| 18 | Verification | — | — | `[ ]` |
+| 18 | Verification | — | — | `[x]` |
 
 ---
 

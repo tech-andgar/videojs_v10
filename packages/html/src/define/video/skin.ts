@@ -6,6 +6,7 @@ import styles from './skin.css?inline';
 
 // Register the player, container, and all UI custom elements.
 import './ui';
+import type { PropertyValues } from '@videojs/element';
 
 const SEEK_TIME = 10;
 
@@ -37,6 +38,10 @@ function getTemplateHTML() {
           </div>
         </div>
       </media-error-dialog>
+
+      <media-pip-overlay id="pip-overlay">
+        <slot name="pip" slot="pip"></slot>
+      </media-pip-overlay>
 
       <media-controls class="media-surface media-controls">
         <media-tooltip-group>
@@ -114,6 +119,12 @@ function getTemplateHTML() {
             </media-cast-button>
             <media-tooltip id="cast-tooltip" side="top" class="media-surface media-tooltip"></media-tooltip>
 
+            <media-pip-overlay-toggle commandfor="pip-overlay-tooltip" class="media-button media-button--subtle media-button--icon media-button--pip-overlay">
+              ${renderIcon('pip-enter', { class: 'media-icon media-icon--pip-overlay-enter' })}
+              ${renderIcon('pip-exit', { class: 'media-icon media-icon--pip-overlay-exit' })}
+            </media-pip-overlay-toggle>
+            <media-tooltip id="pip-overlay-tooltip" side="top" class="media-surface media-tooltip"></media-tooltip>
+
             <media-pip-button commandfor="pip-tooltip" class="media-button media-button--subtle media-button--icon media-button--pip">
               ${renderIcon('pip-enter', { class: 'media-icon media-icon--pip-enter' })}
               ${renderIcon('pip-exit', { class: 'media-icon media-icon--pip-exit' })}
@@ -138,6 +149,7 @@ function getTemplateHTML() {
       <media-hotkey keys="f" action="toggleFullscreen"></media-hotkey>
       <media-hotkey keys="c" action="toggleSubtitles"></media-hotkey>
       <media-hotkey keys="i" action="togglePictureInPicture"></media-hotkey>
+      <media-hotkey keys="p" action="togglePipOverlay"></media-hotkey>
       <media-hotkey keys="ArrowRight" action="seekStep" value="5"></media-hotkey>
       <media-hotkey keys="ArrowLeft" action="seekStep" value="-5"></media-hotkey>
       <media-hotkey keys="l" action="seekStep" value="10"></media-hotkey>
@@ -162,8 +174,27 @@ function getTemplateHTML() {
 
 export class VideoSkinElement extends SkinElement {
   static readonly tagName = 'video-skin';
-  static styles = createShadowStyle(styles);
-  static template = createTemplate(getTemplateHTML());
+  static readonly styles = createShadowStyle(styles);
+  static readonly template = createTemplate(getTemplateHTML());
+
+  static override readonly properties = {
+    ...SkinElement.properties,
+    pipSrc: { type: String, attribute: 'pip-src' },
+  };
+
+  pipSrc?: string;
+
+  protected override update(changed: PropertyValues): void {
+    super.update(changed);
+
+    if (changed.has('pipSrc')) {
+      const overlay = this.shadowRoot?.getElementById('pip-overlay') as any;
+      console.log('[video-skin] Propagating pipSrc to overlay:', { overlay: !!overlay, src: this.pipSrc });
+      if (overlay) {
+        overlay.pipSrc = this.pipSrc;
+      }
+    }
+  }
 }
 
 safeDefine(VideoSkinElement);

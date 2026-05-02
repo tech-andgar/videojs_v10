@@ -25,17 +25,20 @@ export const pipOverlayFeature = definePlayerFeature({
     showPipOverlay(src?) {
       const state = get() as unknown as MediaPipOverlayState;
       const resolved = src ?? state.pipOverlaySrc ?? state.pipOverlaySources[0]?.src ?? null;
+      console.log('[pip-overlay] showPipOverlay', { src, resolved });
       if (resolved) {
         set({ pipOverlayActive: true, pipOverlaySrc: resolved, pipOverlayError: null });
       }
     },
 
     hidePipOverlay() {
+      console.log('[pip-overlay] hidePipOverlay');
       set({ pipOverlayActive: false });
     },
 
     togglePipOverlay(src?) {
       const state = get() as unknown as MediaPipOverlayState;
+      console.log('[pip-overlay] togglePipOverlay', { active: state.pipOverlayActive });
       if (state.pipOverlayActive) {
         set({ pipOverlayActive: false });
       } else {
@@ -46,17 +49,24 @@ export const pipOverlayFeature = definePlayerFeature({
     setPipOverlayPosition(x, y) {
       const state = get() as unknown as MediaPipOverlayState;
       const clamp = (v: number) => (state.pipOverlayConstrained ? Math.max(0, Math.min(1, v)) : v);
-      set({ pipOverlayPosition: { x: clamp(x), y: clamp(y) } });
+      const newX = clamp(x);
+      const newY = clamp(y);
+      console.log('[pip-overlay] setPosition', { x: newX, y: newY });
+      set({ pipOverlayPosition: { x: newX, y: newY } });
     },
 
     setPipOverlayScale(scale) {
-      set({ pipOverlayScale: Math.max(0.15, Math.min(0.5, scale)) });
+      const newScale = Math.max(0.15, Math.min(0.5, scale));
+      console.log('[pip-overlay] setScale', { scale: newScale });
+      set({ pipOverlayScale: newScale });
     },
 
     setPipOverlaySources(sources) {
+      console.log('[pip-overlay] setSources', sources);
       set({ pipOverlaySources: sources });
       const state = get() as unknown as MediaPipOverlayState;
       if (!state.pipOverlaySrc && sources.length > 0 && sources[0]) {
+        console.log('[pip-overlay] Auto-selecting first source:', sources[0].src);
         set({ pipOverlaySrc: sources[0].src });
       }
     },
@@ -67,6 +77,18 @@ export const pipOverlayFeature = definePlayerFeature({
       if (source) {
         set({ pipOverlayLang: lang, pipOverlaySrc: source.src });
       }
+    },
+
+    addPipOverlaySource(source) {
+      const state = get() as unknown as MediaPipOverlayState;
+      if (!state.pipOverlaySources.some((s) => s.src === source.src)) {
+        state.setPipOverlaySources([...state.pipOverlaySources, source]);
+      }
+    },
+
+    removePipOverlaySource(src) {
+      const state = get() as unknown as MediaPipOverlayState;
+      state.setPipOverlaySources(state.pipOverlaySources.filter((s) => s.src !== src));
     },
 
     setPipOverlayError(error) {
@@ -102,11 +124,13 @@ export const pipOverlayFeature = definePlayerFeature({
       const absDrift = Math.abs(drift);
 
       if (absDrift > 2) {
+        console.log('[pip-overlay] Hard sync (drift > 2s):', drift);
         pip.currentTime = media.currentTime; // Hard sync for large drift
       } else if (absDrift > 0.3) {
         // Soft sync via rate
         const baseRate = media.playbackRate;
         pip.playbackRate = drift > 0 ? baseRate * 0.9 : baseRate * 1.1;
+        console.log('[pip-overlay] Soft sync (playbackRate adj):', pip.playbackRate);
       } else if (pip.playbackRate !== media.playbackRate) {
         pip.playbackRate = media.playbackRate; // Restore normal rate
       }
@@ -118,10 +142,13 @@ export const pipOverlayFeature = definePlayerFeature({
       if (!pip || !state.pipOverlayActive) return;
 
       if (media.paused && !pip.paused) {
+        console.log('[pip-overlay] Sync: Pausing secondary');
         pip.pause();
       } else if (!media.paused && pip.paused) {
+        console.log('[pip-overlay] Sync: Playing secondary');
         pip.play().catch((err: unknown) => {
           if (err instanceof DOMException && err.name === 'NotAllowedError') {
+            console.warn('[pip-overlay] Autoplay blocked, requires gesture');
             set({ pipOverlayRequiresGesture: true });
           }
         });

@@ -4,6 +4,7 @@ import type { AnyPlayerStore } from '../media/types';
 import {
   selectFullscreen,
   selectPiP,
+  selectPipOverlay,
   selectPlayback,
   selectPlaybackRate,
   selectTextTrack,
@@ -17,6 +18,7 @@ export type HotkeyActionName =
   | 'toggleFullscreen'
   | 'toggleSubtitles'
   | 'togglePictureInPicture'
+  | 'togglePipOverlay'
   | 'seekStep'
   | 'volumeStep'
   | 'speedUp'
@@ -61,6 +63,11 @@ const HOTKEY_ACTIONS: Record<HotkeyActionName, HotkeyActionResolver> = {
     const pip = selectPiP(store.state);
     if (!pip) return;
     pip.pip ? pip.exitPictureInPicture() : pip.requestPictureInPicture();
+  },
+
+  togglePipOverlay({ store }) {
+    console.log('[vjs-hotkey] Toggling PIP Overlay (Hotkey: P)');
+    selectPipOverlay(store.state)?.togglePipOverlay();
   },
 
   seekStep({ store, value }) {

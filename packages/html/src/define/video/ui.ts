@@ -19,7 +19,14 @@ import { SeekButtonElement } from '../../ui/seek-button/seek-button-element';
 import { TooltipElement } from '../../ui/tooltip/tooltip-element';
 import { TooltipGroupElement } from '../../ui/tooltip/tooltip-group-element';
 import { safeDefine } from '../safe-define';
-import { defineControls, defineErrorDialog, defineTime, defineTimeSlider, defineVolumeSlider } from '../ui/compounds';
+import {
+  defineControls,
+  defineErrorDialog,
+  definePipOverlay,
+  defineTime,
+  defineTimeSlider,
+  defineVolumeSlider,
+} from '../ui/compounds';
 
 // Value import — player.ts body runs before this module's body.
 import { VideoPlayerElement } from './player';
@@ -35,6 +42,7 @@ defineErrorDialog();
 defineTimeSlider();
 defineVolumeSlider();
 defineTime();
+definePipOverlay();
 
 // Standalone elements.
 safeDefine(BufferingIndicatorElement);

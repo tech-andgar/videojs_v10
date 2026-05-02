@@ -30,6 +30,7 @@ import { Gesture } from '@/ui/gesture/gesture';
 import { Hotkey } from '@/ui/hotkey/hotkey';
 import { MuteButton } from '@/ui/mute-button';
 import { PiPButton } from '@/ui/pip-button';
+import { PipOverlay, PipOverlayToggle } from '@/ui/pip-overlay';
 import { PlayButton } from '@/ui/play-button';
 import { PlaybackRateButton } from '@/ui/playback-rate-button';
 import { Popover } from '@/ui/popover';
@@ -87,7 +88,7 @@ function VolumePopover(): ReactNode {
 }
 
 export function VideoSkin(props: VideoSkinProps): ReactNode {
-  const { children, className, poster, ...rest } = props;
+  const { children, className, poster, pipSrc, ...rest } = props;
 
   return (
     <Container className={cn('media-default-skin media-default-skin--video', className)} {...rest}>
@@ -120,6 +121,8 @@ export function VideoSkin(props: VideoSkinProps): ReactNode {
           </div>
         </ErrorDialog.Popup>
       </ErrorDialog.Root>
+
+      <PipOverlay pipSrc={pipSrc} />
 
       <Controls.Root className="media-surface media-controls">
         <Tooltip.Provider>
@@ -221,6 +224,18 @@ export function VideoSkin(props: VideoSkinProps): ReactNode {
             <Tooltip.Root side="top">
               <Tooltip.Trigger
                 render={
+                  <PipOverlayToggle className="media-button--pip-overlay" render={<Button />}>
+                    <PipEnterIcon className="media-icon media-icon--pip-overlay-enter" />
+                    <PipExitIcon className="media-icon media-icon--pip-overlay-exit" />
+                  </PipOverlayToggle>
+                }
+              />
+              <Tooltip.Popup className="media-surface media-tooltip" />
+            </Tooltip.Root>
+
+            <Tooltip.Root side="top">
+              <Tooltip.Trigger
+                render={
                   <PiPButton className="media-button--pip" render={<Button />}>
                     <PipEnterIcon className="media-icon media-icon--pip-enter" />
                     <PipExitIcon className="media-icon media-icon--pip-exit" />
@@ -254,6 +269,7 @@ export function VideoSkin(props: VideoSkinProps): ReactNode {
       <Hotkey keys="f" action="toggleFullscreen" />
       <Hotkey keys="c" action="toggleSubtitles" />
       <Hotkey keys="i" action="togglePictureInPicture" />
+      <Hotkey keys="p" action="togglePipOverlay" />
       <Hotkey keys="ArrowRight" action="seekStep" value={5} />
       <Hotkey keys="ArrowLeft" action="seekStep" value={-5} />
       <Hotkey keys="l" action="seekStep" value={10} />

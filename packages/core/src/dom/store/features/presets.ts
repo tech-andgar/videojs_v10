@@ -11,6 +11,7 @@ import { errorFeature } from './error';
 import { fullscreenFeature } from './fullscreen';
 import { liveFeature } from './live';
 import { pipFeature } from './pip';
+import { pipOverlayFeature } from './pip-overlay';
 import { playbackFeature } from './playback';
 import { playbackRateFeature } from './playback-rate';
 import { remotePlaybackFeature } from './remote-playback';
@@ -28,6 +29,7 @@ export const videoFeatures: VideoFeatures = [
   bufferFeature,
   fullscreenFeature,
   pipFeature,
+  pipOverlayFeature,
   remotePlaybackFeature,
   controlsFeature,
   textTrackFeature,
@@ -61,6 +63,7 @@ export const liveVideoFeatures: LiveVideoFeatures = [
   bufferFeature,
   fullscreenFeature,
   pipFeature,
+  pipOverlayFeature,
   remotePlaybackFeature,
   controlsFeature,
   textTrackFeature,
