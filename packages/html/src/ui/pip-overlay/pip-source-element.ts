@@ -6,7 +6,7 @@ export class PipSourceElement extends HTMLElement {
   }
 
   get lang(): string {
-    return this.getAttribute('lang') || '';
+    return this.getAttribute('data-lang') || '';
   }
 
   get label(): string {
