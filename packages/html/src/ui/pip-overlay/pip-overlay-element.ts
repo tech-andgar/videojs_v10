@@ -290,6 +290,7 @@ export class PipOverlayElement extends MediaElement {
     if (!state) return;
 
     if (e.key === 'Escape') {
+      e.stopPropagation();
       state.hidePipOverlay();
       return;
     }
