@@ -376,11 +376,15 @@ export class PipOverlayElement extends MediaElement {
 
   readonly #onError = () => {
     const state = this.pipOverlay.value;
-    if (state) {
-      const msg = 'Error loading secondary video';
-      state.setPipOverlayError(msg);
-      this.#ariaLive.textContent = msg;
+    if (!state) return;
+
+    if (__DEV__ && this.#video.error?.code === MediaError.MEDIA_ERR_DECODE) {
+      console.warn('[pip-overlay] MEDIA_ERR_DECODE on PIP video. On iOS Safari this may indicate the hardware video decoder limit has been reached. Consider reducing concurrent video elements.');
     }
+
+    const msg = 'Error loading secondary video';
+    state.setPipOverlayError(msg);
+    this.#ariaLive.textContent = msg;
   };
 
   readonly #onWaiting = () => {
