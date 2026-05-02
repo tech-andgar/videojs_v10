@@ -269,11 +269,18 @@ export class PipOverlayElement extends MediaElement {
   readonly #onPointerDown = (e: PointerEvent) => {
     if (e.target === this.#closeBtn || e.target === this.#gestureBtn) return;
 
+    const state = this.pipOverlay.value;
+    if (!state) return;
+
+    const container = this.container.value?.container;
+    if (!container) return;
+
     const target = e.target as HTMLElement;
     const isResize = target.classList.contains('pip-overlay__resize');
 
     this.setPointerCapture(e.pointerId);
     this.#dragPointerId = e.pointerId;
+
     if (isResize) {
       log('resize start');
       this.dataset.resizing = '';
@@ -282,19 +289,11 @@ export class PipOverlayElement extends MediaElement {
       this.dataset.dragging = '';
     }
 
-    const container = this.container.value?.container;
-    if (!container) return;
-
     const startX = e.clientX;
     const startY = e.clientY;
-
-    const state = this.pipOverlay.value;
-    if (!state) return;
-
     const startPosX = state.pipOverlayPosition.x;
     const startPosY = state.pipOverlayPosition.y;
     const startScale = state.pipOverlayScale;
-
     const rect = container.getBoundingClientRect();
 
     let rafId: number | null = null;
@@ -310,12 +309,9 @@ export class PipOverlayElement extends MediaElement {
         const deltaY = latestMoveEvt.clientY - startY;
 
         if (isResize) {
-          const deltaScale = deltaX / rect.width;
-          state.setPipOverlayScale(startScale + deltaScale);
+          state.setPipOverlayScale(startScale + deltaX / rect.width);
         } else {
-          const deltaPosX = deltaX / rect.width;
-          const deltaPosY = deltaY / rect.height;
-          state.setPipOverlayPosition(startPosX + deltaPosX, startPosY + deltaPosY);
+          state.setPipOverlayPosition(startPosX + deltaX / rect.width, startPosY + deltaY / rect.height);
         }
       });
     };
@@ -330,12 +326,13 @@ export class PipOverlayElement extends MediaElement {
       this.#dragPointerId = null;
       delete this.dataset.dragging;
       delete this.dataset.resizing;
-      globalThis.removeEventListener('pointermove', onPointerMove);
-      globalThis.removeEventListener('pointerup', onPointerUp);
+      this.removeEventListener('pointermove', onPointerMove);
+      this.removeEventListener('pointerup', onPointerUp);
     };
 
-    globalThis.addEventListener('pointermove', onPointerMove);
-    globalThis.addEventListener('pointerup', onPointerUp);
+    // Pointer capture routes pointermove/pointerup to this element
+    this.addEventListener('pointermove', onPointerMove);
+    this.addEventListener('pointerup', onPointerUp);
   };
 
   readonly #onKeyDown = (e: KeyboardEvent) => {
