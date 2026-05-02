@@ -58,13 +58,13 @@ Not included in `videoFeatures` by default — opt-in only.
 |-------|----------|-------|
 | Source config | Hybrid (C) | Attribute `pip-src` + `<pip-source>` children + programmatic API |
 | Time sync strategy | Soft Catch-up | Adjust `playbackRate` for small drifts (< 2s). Hard `seek` only for large drifts to avoid micro-stuttering. |
-| Buffering sync | Bi-directional | If PIP stalls (buffering), main video pauses automatically until PIP recovers. |
+| Buffering sync | Bi-directional (debounced) | If PIP stalls (buffering) for >500ms, main video pauses. Cancel if PIP recovers within threshold. |
 | PIP controls | None | Silent sync — no play/pause/seek controls on PIP |
-| Multiple PIPs | One (extensible) | Design for future multi-PIP but implement one |
+| Multiple PIPs | One (v1 tradeoff) | Singular state shape (`pipOverlaySrc`, `pipOverlayPosition`). Intentional v1 simplification — multi-PIP would require array-based state redesign. Documented tradeoff, not a future-proof shape. |
 | Position bounds | Constrained | Restricted to container. Clamps automatically on container resize. |
 | Resize | Yes | Corner resize handles |
 | Toggle button | Yes | Button in control bar |
-| Multi-source/lang | Yes | `<pip-source lang="es" src="...">` children |
+| Multi-source/lang | Yes | `<pip-source data-lang="es" src="...">` children. Uses `data-lang` (not `lang`) to avoid semantic conflict with HTML `lang` attribute. |
 | Audio | Always muted | **Important:** User's responsibility to provide audio-less video file to save bandwidth. |
 | Autoplay Policy | Fallback UI (Idea A) | If PIP `play()` is blocked by browser, main video continues, PIP shows a "Tap to Play" overlay button. |
 | Aspect ratio | Auto-detect | Read `videoWidth/videoHeight` on `loadedmetadata` |
@@ -73,10 +73,16 @@ Not included in `videoFeatures` by default — opt-in only.
 | Keyboard shortcut | Configurable | Via `<media-hotkey keys="p" action="togglePipOverlay">` |
 | Mobile (<640px) | Larger min scale | 40% instead of 28% |
 | Native PIP coexistence | Both active | Overlay and native PIP can coexist |
-| Fullscreen | PIP persists | Overlay stays visible in fullscreen |
+| Fullscreen | Container fullscreen forced | When PIP active, always use container fullscreen (never `webkitSetPresentationMode`). Prevents iOS Safari ripping `<video>` from DOM. If container fullscreen unavailable, show warning. |
+| RTL support | Position flip | Default position flips `x` in RTL layouts via `isRTL()`. Arrow key movement also flips horizontal direction. |
+| Touch close | Hybrid auto-detect | `@media (hover: none)`: close button always visible. `@media (hover: hover)`: reveal on hover/focus-within. |
 | Snap-to-corner | No | Free position — stays where user drops it |
 | Animation | Scale+fade (configurable) | Options: `scale-fade` / `fade` / `slide` / `none` |
 | Accessibility | Advanced | ARIA roles, `aria-live` announcements, keyboard drag (Arrow keys) & resize (Shift+Arrow). |
+| Focus order | After controls | Overlay `tabindex="-1"` (not in tab order). Focus moves to overlay only via toggle button activation. Escape closes and returns focus to toggle. |
+| Escape key | Overlay-scoped | When overlay focused, Escape closes overlay (`stopPropagation`). Does not exit fullscreen. |
+| aria-live strings | Defined | "Secondary video opened", "Secondary video closed", "Secondary video error: {message}", "Secondary video resumed". |
+| Min overlay size | 160px minimum | `min-width: 160px` prevents unreadable gesture prompt on very small containers (<320px). |
 | Initial position | Bottom-right (configurable) | `{ x: 0.78, y: 0.72 }` default |
 | CORS | Inherit from main | Fallback to own `crossorigin` attribute |
 | ResizeObserver | Yes | Container size dictates mobile scale and dynamic position clamping. |
@@ -189,6 +195,14 @@ Feature responsibilities:
 ```ts
 export const PIP_OVERLAY_MEDIA_SYMBOL = Symbol('@videojs/pip-overlay-media');
 
+interface PipOverlayMediaHost {
+  [PIP_OVERLAY_MEDIA_SYMBOL]?: HTMLVideoElement;
+}
+
+function getPipMedia(container: Element): HTMLVideoElement | null {
+  return (container as PipOverlayMediaHost)[PIP_OVERLAY_MEDIA_SYMBOL] ?? null;
+}
+
 export const pipOverlayFeature = definePlayerFeature({
   name: 'pip-overlay',
 
@@ -250,38 +264,80 @@ export const pipOverlayFeature = definePlayerFeature({
     const { media, container } = target;
     if (!container || !isMediaPauseCapable(media) || !isMediaSeekCapable(media)) return;
 
-    const getPipMedia = (): HTMLVideoElement | null =>
-      (container as any)[PIP_OVERLAY_MEDIA_SYMBOL] ?? null;
+    const pip = () => getPipMedia(container);
+
+    // --- RTL: Flip default position ---
+    if (isRTL(container)) {
+      const { pipOverlayPosition } = get();
+      if (pipOverlayPosition.x === 0.78) {
+        set({ pipOverlayPosition: { x: 0.22, y: pipOverlayPosition.y } });
+      }
+    }
 
     // --- Soft Sync Logic ---
     const syncTime = () => {
-      const pip = getPipMedia();
-      if (!pip || !get().pipOverlayActive) return;
-      const drift = pip.currentTime - media.currentTime;
+      const pipEl = pip();
+      if (!pipEl || !get().pipOverlayActive) return;
+      const drift = pipEl.currentTime - media.currentTime;
       const absDrift = Math.abs(drift);
       
       if (absDrift > 2) {
-        pip.currentTime = media.currentTime; // Hard sync for large drift
+        pipEl.currentTime = media.currentTime;
       } else if (absDrift > 0.3) {
-        // Soft sync via rate
         const baseRate = media.playbackRate;
-        pip.playbackRate = drift > 0 ? baseRate * 0.9 : baseRate * 1.1;
-      } else if (pip.playbackRate !== media.playbackRate) {
-        pip.playbackRate = media.playbackRate; // Restore normal rate
+        pipEl.playbackRate = drift > 0 ? baseRate * 0.9 : baseRate * 1.1;
+      } else if (pipEl.playbackRate !== media.playbackRate) {
+        pipEl.playbackRate = media.playbackRate;
       }
     };
 
     const syncPlayState = () => {
-      const pip = getPipMedia();
-      if (!pip || !get().pipOverlayActive) return;
-      if (media.paused && !pip.paused) {
-        pip.pause();
-      } else if (!media.paused && pip.paused) {
-        pip.play().catch((err) => {
+      const pipEl = pip();
+      if (!pipEl || !get().pipOverlayActive) return;
+      if (media.paused && !pipEl.paused) {
+        pipEl.pause();
+      } else if (!media.paused && pipEl.paused) {
+        pipEl.play().catch((err) => {
           if (err.name === 'NotAllowedError') set({ pipOverlayRequiresGesture: true });
         });
       }
     };
+
+    // --- Bi-directional Buffering (500ms debounce) ---
+    let bufferingTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onPipWaiting = () => {
+      if (bufferingTimer) return;
+      bufferingTimer = setTimeout(() => {
+        if (!media.paused && get().pipOverlayActive) media.pause();
+        bufferingTimer = null;
+      }, 500);
+    };
+
+    const onPipPlaying = () => {
+      if (bufferingTimer) {
+        clearTimeout(bufferingTimer);
+        bufferingTimer = null;
+        return; // Recovered within threshold, no pause needed
+      }
+      if (media.paused && get().pipOverlayActive) {
+        media.play().catch(() => {});
+      }
+    };
+
+    signal.addEventListener('abort', () => {
+      if (bufferingTimer) clearTimeout(bufferingTimer);
+    });
+
+    // --- Fullscreen Guard: Force container fullscreen when PIP active ---
+    // Intercept fullscreen requests to prevent iOS Safari native video fullscreen
+    // which rips <video> from DOM and destroys PIP overlay.
+    // The existing fullscreen feature already prefers container fullscreen;
+    // this guard ensures it NEVER falls back to webkitSetPresentationMode
+    // when PIP overlay is active.
+    // Implementation: pip-overlay-element listens for 'fullscreenchange' and
+    // if webkitPresentationMode === 'fullscreen' while pipOverlayActive,
+    // exits and re-requests on container instead.
 
     // --- ResizeObserver (Clamp + Mobile Scale) ---
     const resizeObserver = new ResizeObserver((entries) => {
@@ -298,8 +354,8 @@ export const pipOverlayFeature = definePlayerFeature({
     // --- Listeners ---
     listen(media, 'timeupdate', syncTime, { signal });
     listen(media, 'seeked', () => { 
-      const pip = getPipMedia();
-      if (pip) pip.currentTime = media.currentTime; 
+      const pipEl = pip();
+      if (pipEl) pipEl.currentTime = media.currentTime; 
     }, { signal });
     listen(media, 'play', syncPlayState, { signal });
     listen(media, 'pause', syncPlayState, { signal });
@@ -346,18 +402,21 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 9. Crossorigin: inherits from main `<video>`, fallback to own attribute
 10. Error: listens to PIP `<video>` `error` event → sets `pipOverlayError`
 11. Loading: sets `data-loading` until `canplay`
-12. **Keyboard A11y**: `keydown` listener on the overlay. `ArrowKeys` to move position (+/- 0.05). `Shift + ArrowKeys` to resize scale (+/- 0.05).
+12. **Keyboard A11y**: `keydown` listener on the overlay. `ArrowKeys` to move position (+/- 0.05). `Shift + ArrowKeys` to resize scale (+/- 0.05). **RTL**: Arrow left/right flipped via `isRTL()` check.
 13. **Autoplay Policy (Idea A)**: If `pipOverlayRequiresGesture` is true, render a large overlay button: "Click to enable secondary video". Click calls `resolvePipOverlayGesture()` and `.play()` on the internal video.
-14. **Bi-directional Buffering**: Listen to internal `<video>` `waiting` event to call `container.media.pause()`, and `playing` to call `container.media.play()`.
-15. **Aria-Live**: Render an internal visually hidden `aria-live="polite"` element that updates text on errors or state changes.
+14. **Bi-directional Buffering**: Listen to internal `<video>` `waiting`/`playing` events. Delegate to store feature's debounced buffering logic (500ms threshold before pausing main).
+15. **Fullscreen Guard**: On iOS Safari, intercept fullscreen to force container fullscreen path. If `webkitPresentationMode` changes to `'fullscreen'` while PIP active, exit and re-request on container. If container fullscreen unavailable, show warning via `pipOverlayError`.
+16. **Aria-Live**: Render an internal visually hidden `aria-live="polite"` element. Specific strings: `"Secondary video opened"`, `"Secondary video closed"`, `"Secondary video error: {message}"`, `"Secondary video resumed"`.
+17. **Min size**: `min-width: 160px` — prevents unreadable overlay on very small containers.
 
 **Accessibility:**
 
 - `role="region"` + `aria-label="Secondary video overlay"`
 - Close button: `aria-label="Close secondary video"`
-- Resize handles: `aria-hidden="true"` (pointer-only interaction)
-- `tabindex="0"` — focusable with Tab
-- `Escape` key closes when focused
+- Resize handles: `aria-hidden="true"` (visual indicators only — keyboard resize operates on overlay itself via Shift+Arrow)
+- `tabindex="-1"` — NOT in tab order. Focus moves to overlay only when toggle button activates it. This prevents screen reader users from encountering overlay before main controls.
+- `Escape` key closes overlay with `stopPropagation()` — does not bubble to fullscreen handler
+- Focus returns to toggle button on close
 - `data-active` / `data-dragging` / `data-resizing` / `data-loading` / `data-error` / `data-requires-gesture` attributes
 
 **Observed attributes:**
@@ -394,11 +453,11 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 `<pip-source>` — declarative multi-language source element.
 
 ```html
-<pip-source lang="es" label="Lengua de señas" src="sign-lang-es.mp4"></pip-source>
+<pip-source data-lang="es" label="Lengua de señas" src="sign-lang-es.mp4"></pip-source>
 ```
 
 - Extends `HTMLElement` (lightweight, no ReactiveElement needed)
-- Attributes: `src`, `lang`, `label`
+- Attributes: `src`, `data-lang`, `label` (`data-lang` avoids semantic conflict with HTML `lang` attribute)
 - Observed by the skin/provider via `MutationObserver` or `slotchange`
 - Populates `pipOverlaySources` in the store
 
@@ -419,6 +478,7 @@ media-pip-overlay {
   left: calc(var(--pip-x, 0.78) * 100%);
   top: calc(var(--pip-y, 0.72) * 100%);
   width: calc(var(--pip-scale, 0.28) * 100%);
+  min-width: 160px;
   aspect-ratio: var(--pip-aspect, 16 / 9);
   transform: translate(-50%, -50%);
 
@@ -433,6 +493,7 @@ media-pip-overlay[data-active] {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
   pointer-events: auto;
+  touch-action: none; /* Prevent scroll conflict on touch drag */
 }
 
 media-pip-overlay:active { cursor: grabbing; }
@@ -454,6 +515,11 @@ media-pip-overlay .pip-overlay__close {
 
 media-pip-overlay:hover .pip-overlay__close,
 media-pip-overlay:focus-within .pip-overlay__close { opacity: 1; }
+
+/* Touch devices: close button always visible */
+@media (hover: none) {
+  media-pip-overlay[data-active] .pip-overlay__close { opacity: 1; }
+}
 
 /* Resize handles */
 media-pip-overlay .pip-overlay__resize {
@@ -846,9 +912,19 @@ Tests to write:
   - `pause` → calls PIP pause()
   - `ratechange` → syncs PIP playbackRate
 
-- **Bi-directional Buffering:**
-  - PIP `waiting` event pauses main media.
-  - PIP `playing` event resumes main media.
+- **Bi-directional Buffering (debounced):**
+  - PIP `waiting` event does NOT immediately pause main — waits 500ms.
+  - PIP `playing` within 500ms cancels pause (no pause occurs).
+  - PIP `waiting` > 500ms pauses main media.
+  - PIP `playing` after pause resumes main media.
+
+- **RTL:**
+  - Default position flips to `x: 0.22` when container is RTL.
+  - Non-default position unchanged in RTL.
+
+- **Fullscreen Guard:**
+  - When PIP active, fullscreen uses container (not native video).
+  - Sets `pipOverlayError` if container fullscreen unavailable on iOS.
 
 - **Mobile & ResizeObserver:**
   - Container resize width < 640 → scale adjusts to 0.4.
@@ -883,8 +959,11 @@ pnpm build:packages
 12. Screen reader test → ARIA labels read correctly and `aria-live` announces state.
 13. Error source → error message shown in overlay
 14. Test in Chrome, Firefox, Safari
-15. Verify Bi-directional buffering: throttle network, see if main pauses when PIP buffers.
+15. Verify Bi-directional buffering: throttle network, main pauses only after 500ms buffer stall. Quick recovery = no pause.
 16. Verify Autoplay Policy fallback UI (requires strict autoplay block).
+17. **iOS Safari**: Enter fullscreen with PIP active → must use container fullscreen, PIP overlay persists. No native video fullscreen takeover.
+18. **RTL**: Set `dir="rtl"` on container → PIP defaults to bottom-left. Arrow keys movement flipped.
+19. **Touch**: On mobile device, close button always visible (no hover required).
 
 ### Manual — React
 
