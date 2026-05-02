@@ -120,6 +120,12 @@ function getTemplateHTML() {
             </media-pip-button>
             <media-tooltip id="pip-tooltip" side="top" class="media-surface media-tooltip"></media-tooltip>
 
+            <media-pip-overlay-toggle commandfor="pip-overlay-tooltip" class="media-button media-button--subtle media-button--icon media-button--pip-overlay">
+              ${renderIcon('pip-enter', { class: 'media-icon media-icon--pip-overlay-enter' })}
+              ${renderIcon('pip-exit', { class: 'media-icon media-icon--pip-overlay-exit' })}
+            </media-pip-overlay-toggle>
+            <media-tooltip id="pip-overlay-tooltip" side="top" class="media-surface media-tooltip"></media-tooltip>
+
             <media-fullscreen-button commandfor="fullscreen-tooltip" class="media-button media-button--subtle media-button--icon media-button--fullscreen">
               ${renderIcon('fullscreen-enter', { class: 'media-icon media-icon--fullscreen-enter' })}
               ${renderIcon('fullscreen-exit', { class: 'media-icon media-icon--fullscreen-exit' })}
@@ -149,6 +155,9 @@ function getTemplateHTML() {
       <media-hotkey keys="End" action="seekToPercent" value="100"></media-hotkey>
       <media-hotkey keys=">" action="speedUp"></media-hotkey>
       <media-hotkey keys="<" action="speedDown"></media-hotkey>
+
+      <!-- PIP Overlay -->
+      <media-pip-overlay></media-pip-overlay>
 
       <!-- Gestures -->
       <media-gesture type="tap" action="togglePaused" pointer="mouse" region="center"></media-gesture>
