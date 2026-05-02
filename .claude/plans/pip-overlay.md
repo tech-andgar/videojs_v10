@@ -48,17 +48,18 @@ Not included in `videoFeatures` by default — opt-in only.
 | Topic | Decision | Notes |
 |-------|----------|-------|
 | Source config | Hybrid (C) | Attribute `pip-src` + `<pip-source>` children + programmatic API |
-| Time offset | None | PIP mirrors main video timestamp exactly |
+| Time sync strategy | Soft Catch-up | Adjust `playbackRate` for small drifts (< 2s). Hard `seek` only for large drifts to avoid micro-stuttering. |
+| Buffering sync | Bi-directional | If PIP stalls (buffering), main video pauses automatically until PIP recovers. |
 | PIP controls | None | Silent sync — no play/pause/seek controls on PIP |
 | Multiple PIPs | One (extensible) | Design for future multi-PIP but implement one |
-| Position bounds | Constrained (configurable) | Restricted to container by default |
+| Position bounds | Constrained | Restricted to container. Clamps automatically on container resize. |
 | Resize | Yes | Corner resize handles |
 | Toggle button | Yes | Button in control bar |
 | Multi-source/lang | Yes | `<pip-source lang="es" src="...">` children |
-| Audio | Always muted | PIP `<video>` has `muted` attribute |
-| Playback rate | Synced | PIP follows main video's `playbackRate` |
+| Audio | Always muted | **Important:** User's responsibility to provide audio-less video file to save bandwidth. |
+| Autoplay Policy | Fallback UI (Idea A) | If PIP `play()` is blocked by browser, main video continues, PIP shows a "Tap to Play" overlay button. |
 | Aspect ratio | Auto-detect | Read `videoWidth/videoHeight` on `loadedmetadata` |
-| Loading state | Spinner (configurable) | Options: `spinner` / `black` / `poster` |
+| Loading state | Spinner | Options: `spinner` / `black` / `poster` |
 | Error handling | Show in overlay (configurable) | Configurable by admin/user |
 | Keyboard shortcut | Configurable | Via `<media-hotkey keys="p" action="togglePipOverlay">` |
 | Mobile (<640px) | Larger min scale | 40% instead of 28% |
@@ -66,9 +67,10 @@ Not included in `videoFeatures` by default — opt-in only.
 | Fullscreen | PIP persists | Overlay stays visible in fullscreen |
 | Snap-to-corner | No | Free position — stays where user drops it |
 | Animation | Scale+fade (configurable) | Options: `scale-fade` / `fade` / `slide` / `none` |
-| Accessibility | Full from start | ARIA roles, keyboard nav, focus management |
+| Accessibility | Advanced | ARIA roles, `aria-live` announcements, keyboard drag (Arrow keys) & resize (Shift+Arrow). |
 | Initial position | Bottom-right (configurable) | `{ x: 0.78, y: 0.72 }` default |
 | CORS | Inherit from main | Fallback to own `crossorigin` attribute |
+| ResizeObserver | Yes | Container size dictates mobile scale and dynamic position clamping. |
 
 ## Source Resolution Priority
 
@@ -80,15 +82,17 @@ Not included in `videoFeatures` by default — opt-in only.
 
 ## Synchronization
 
-Main video → PIP video (unidirectional):
+Main video ↔ PIP video:
 
 | Event | Action |
 |-------|--------|
-| `play` | `pipMedia.play()` |
+| `play` | `pipMedia.play().catch(showUnlockButton)` |
 | `pause` | `pipMedia.pause()` |
 | `seeked` | `pipMedia.currentTime = media.currentTime` |
-| `timeupdate` | if drift > 0.3s → `pipMedia.currentTime = media.currentTime` |
-| `ratechange` | `pipMedia.playbackRate = media.playbackRate` |
+| `timeupdate` | If drift 0.3s-2s: adjust `pipMedia.playbackRate`. If > 2s: force `currentTime` |
+| `ratechange` | Base `pipMedia.playbackRate = media.playbackRate` |
+| `pipMedia:waiting` | `media.pause()` (Wait for PIP to buffer) |
+| `pipMedia:playing` | `media.play()` (Resume main when PIP recovers) |
 
 The PIP `<video>` element is registered on the container via `Symbol('@videojs/pip-overlay-media')`.
 The feature reads it during sync events.
@@ -147,6 +151,7 @@ export interface MediaPipOverlayState {
   pipOverlayLoadingState: PipOverlayLoadingState;
   pipOverlayAnimation: PipOverlayAnimation;
   pipOverlayError: string | null;
+  pipOverlayRequiresGesture: boolean; // Autoplay policy block state
 
   showPipOverlay(src?: string): void;
   hidePipOverlay(): void;
@@ -156,6 +161,7 @@ export interface MediaPipOverlayState {
   setPipOverlaySources(sources: PipOverlaySource[]): void;
   setPipOverlayLang(lang: string): void;
   dismissPipOverlayError(): void;
+  resolvePipOverlayGesture(): void;
 }
 ```
 
@@ -188,6 +194,7 @@ export const pipOverlayFeature = definePlayerFeature({
     pipOverlayLoadingState: 'spinner',
     pipOverlayAnimation: 'scale-fade',
     pipOverlayError: null,
+    pipOverlayRequiresGesture: false,
 
     showPipOverlay(src?) {
       const state = get();
@@ -223,6 +230,11 @@ export const pipOverlayFeature = definePlayerFeature({
     },
 
     dismissPipOverlayError() { set({ pipOverlayError: null }); },
+
+    resolvePipOverlayGesture() {
+      set({ pipOverlayRequiresGesture: false });
+      // UI component should follow up with a programmatic pipMedia.play()
+    }
   }),
 
   attach({ target, signal, get, set }) {
@@ -232,36 +244,57 @@ export const pipOverlayFeature = definePlayerFeature({
     const getPipMedia = (): HTMLVideoElement | null =>
       (container as any)[PIP_OVERLAY_MEDIA_SYMBOL] ?? null;
 
+    // --- Soft Sync Logic ---
     const syncTime = () => {
       const pip = getPipMedia();
       if (!pip || !get().pipOverlayActive) return;
-      if (Math.abs(pip.currentTime - media.currentTime) > 0.3) pip.currentTime = media.currentTime;
+      const drift = pip.currentTime - media.currentTime;
+      const absDrift = Math.abs(drift);
+      
+      if (absDrift > 2) {
+        pip.currentTime = media.currentTime; // Hard sync for large drift
+      } else if (absDrift > 0.3) {
+        // Soft sync via rate
+        const baseRate = media.playbackRate;
+        pip.playbackRate = drift > 0 ? baseRate * 0.9 : baseRate * 1.1;
+      } else if (pip.playbackRate !== media.playbackRate) {
+        pip.playbackRate = media.playbackRate; // Restore normal rate
+      }
     };
 
     const syncPlayState = () => {
       const pip = getPipMedia();
       if (!pip || !get().pipOverlayActive) return;
-      if (media.paused && !pip.paused) pip.pause();
-      else if (!media.paused && pip.paused) pip.play().catch(() => {});
+      if (media.paused && !pip.paused) {
+        pip.pause();
+      } else if (!media.paused && pip.paused) {
+        pip.play().catch((err) => {
+          if (err.name === 'NotAllowedError') set({ pipOverlayRequiresGesture: true });
+        });
+      }
     };
 
-    const syncRate = () => {
-      const pip = getPipMedia();
-      if (!pip || !get().pipOverlayActive) return;
-      if (pip.playbackRate !== media.playbackRate) pip.playbackRate = media.playbackRate;
-    };
+    // --- ResizeObserver (Clamp + Mobile Scale) ---
+    const resizeObserver = new ResizeObserver((entries) => {
+      const { width } = entries[0].contentRect;
+      if (width < 640 && get().pipOverlayScale < 0.4) set({ pipOverlayScale: 0.4 });
+      
+      // Trigger a position re-clamp by re-applying the current position
+      const { x, y } = get().pipOverlayPosition;
+      get().setPipOverlayPosition(x, y); 
+    });
+    resizeObserver.observe(container);
+    signal.addEventListener('abort', () => resizeObserver.disconnect());
 
-    // Mobile scale adjustment
-    if (container.clientWidth < 640 && get().pipOverlayScale < 0.4) {
-      set({ pipOverlayScale: 0.4 });
-    }
-
+    // --- Listeners ---
     listen(media, 'timeupdate', syncTime, { signal });
-    listen(media, 'seeked', syncTime, { signal });
+    listen(media, 'seeked', () => { 
+      const pip = getPipMedia();
+      if (pip) pip.currentTime = media.currentTime; 
+    }, { signal });
     listen(media, 'play', syncPlayState, { signal });
     listen(media, 'pause', syncPlayState, { signal });
     listen(media, 'playing', syncPlayState, { signal });
-    listen(media, 'ratechange', syncRate, { signal });
   },
 });
 ```
@@ -272,17 +305,12 @@ export const pipOverlayFeature = definePlayerFeature({
 
 ### `packages/core/src/dom/store/selectors.ts`
 
-Add:
-
 ```ts
 import { pipOverlayFeature } from './features/pip-overlay';
-
 export const selectPipOverlay = createSelector(pipOverlayFeature);
 ```
 
 ### `packages/core/src/dom/store/features/index.ts`
-
-Add:
 
 ```ts
 export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
@@ -290,7 +318,7 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 
 ---
 
-## Phase 4: PIP Overlay Element
+## Phase 4: PIP Overlay Element (HTML)
 
 ### `packages/html/src/ui/pip-overlay/pip-overlay-element.ts` (new)
 
@@ -309,6 +337,10 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 9. Crossorigin: inherits from main `<video>`, fallback to own attribute
 10. Error: listens to PIP `<video>` `error` event → sets `pipOverlayError`
 11. Loading: sets `data-loading` until `canplay`
+12. **Keyboard A11y**: `keydown` listener on the overlay. `ArrowKeys` to move position (+/- 0.05). `Shift + ArrowKeys` to resize scale (+/- 0.05).
+13. **Autoplay Policy (Idea A)**: If `pipOverlayRequiresGesture` is true, render a large overlay button: "Click to enable secondary video". Click calls `resolvePipOverlayGesture()` and `.play()` on the internal video.
+14. **Bi-directional Buffering**: Listen to internal `<video>` `waiting` event to call `container.media.pause()`, and `playing` to call `container.media.play()`.
+15. **Aria-Live**: Render an internal visually hidden `aria-live="polite"` element that updates text on errors or state changes.
 
 **Accessibility:**
 
@@ -317,7 +349,7 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 - Resize handles: `aria-hidden="true"` (pointer-only interaction)
 - `tabindex="0"` — focusable with Tab
 - `Escape` key closes when focused
-- `data-active` / `data-dragging` / `data-resizing` / `data-loading` / `data-error` attributes
+- `data-active` / `data-dragging` / `data-resizing` / `data-loading` / `data-error` / `data-requires-gesture` attributes
 
 **Observed attributes:**
 
@@ -330,7 +362,7 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 
 ---
 
-## Phase 5: PIP Toggle Button
+## Phase 5: PIP Toggle Button Element (HTML)
 
 ### `packages/html/src/ui/pip-overlay/pip-overlay-toggle-element.ts` (new)
 
@@ -346,7 +378,7 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 
 ---
 
-## Phase 6: PIP Source Element
+## Phase 6: PIP Source Element (HTML)
 
 ### `packages/html/src/ui/pip-overlay/pip-source-element.ts` (new)
 
@@ -363,7 +395,7 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 
 ---
 
-## Phase 7: CSS
+## Phase 7: CSS Styles
 
 PIP overlay styles (inline in skin or `packages/skins/`):
 
@@ -430,6 +462,14 @@ media-pip-overlay:focus-within .pip-overlay__resize { opacity: 1; }
 /* Video */
 media-pip-overlay video { width: 100%; height: 100%; object-fit: cover; display: block; }
 
+/* Gesture Fallback UI */
+media-pip-overlay .pip-overlay__gesture-prompt {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.8);
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: bold; cursor: pointer;
+  z-index: 5;
+}
+
 /* Mobile */
 @container (max-width: 640px) {
   media-pip-overlay { width: calc(var(--pip-scale-mobile, 0.4) * 100%); }
@@ -438,7 +478,7 @@ media-pip-overlay video { width: 100%; height: 100%; object-fit: cover; display:
 
 ---
 
-## Phase 8: Skin Integration
+## Phase 8: HTML Skin Integration
 
 ### `packages/html/src/define/video/skin.ts`
 
@@ -572,8 +612,11 @@ export function PipOverlay({ className, src, crossOrigin }: PipOverlayProps): Re
   // Register PIP video on container via symbol
   // Handle drag/resize via pointer events
   // Sync src, auto-detect aspect ratio
+  // Handle Keyboard A11y for drag/resize via onKeyDown
+  // Handle Bi-directional buffering via onWaiting/onPlaying
   // Render: <div role="region"> + <video muted playsinline> + close button + resize handles
-  // ARIA: aria-label, tabIndex, Escape to close, focus management
+  // Fallback UI: if pipOverlay.pipOverlayRequiresGesture, render unlock button over video
+  // ARIA: aria-label, tabIndex, Escape to close, focus management, aria-live region
 }
 
 export namespace PipOverlay {
@@ -779,6 +822,7 @@ Tests to write:
   - `setPipOverlaySources()` + auto-select first source
   - `setPipOverlayLang()` selects matching source
   - `dismissPipOverlayError()` clears error
+  - `resolvePipOverlayGesture()` clears gesture block flag
 
 - **Source resolution priority:**
   - Programmatic src wins over stored src
@@ -786,14 +830,20 @@ Tests to write:
   - No source → no-op
 
 - **Sync (with mocked media):**
-  - `timeupdate` → syncs PIP currentTime when drift > 0.3s
+  - `timeupdate` → syncs PIP currentTime by adjusting `playbackRate` (soft sync) when drift > 0.3s.
+  - `timeupdate` → hard syncs `currentTime` only when drift > 2s.
   - `seeked` → always syncs PIP currentTime
   - `play` → calls PIP play()
   - `pause` → calls PIP pause()
   - `ratechange` → syncs PIP playbackRate
 
-- **Mobile:**
-  - Container width < 640 → scale adjusts to 0.4
+- **Bi-directional Buffering:**
+  - PIP `waiting` event pauses main media.
+  - PIP `playing` event resumes main media.
+
+- **Mobile & ResizeObserver:**
+  - Container resize width < 640 → scale adjusts to 0.4.
+  - Position re-clamps on container resize.
 
 ---
 
@@ -817,13 +867,15 @@ pnpm build:packages
 5. Play/pause/seek main video → PIP syncs silently
 6. Change playback rate → PIP follows
 7. Click X → overlay hides with animation
-8. Keyboard: Tab to overlay, Escape to close
+8. Keyboard: Tab to overlay, Escape to close, Arrow keys to move, Shift+Arrow keys to resize.
 9. Press `p` → toggle PIP overlay
 10. Fullscreen → PIP persists
-11. Resize browser to < 640px → PIP scale increases to 40%
-12. Screen reader test → ARIA labels read correctly
+11. Resize browser to < 640px → PIP scale increases to 40% and clamps within view if outside.
+12. Screen reader test → ARIA labels read correctly and `aria-live` announces state.
 13. Error source → error message shown in overlay
 14. Test in Chrome, Firefox, Safari
+15. Verify Bi-directional buffering: throttle network, see if main pauses when PIP buffers.
+16. Verify Autoplay Policy fallback UI (requires strict autoplay block).
 
 ### Manual — React
 
@@ -875,5 +927,7 @@ The layered architecture makes platform support straightforward:
 | NEW | `src/ui/pip-overlay/use-pip-overlay.ts` | `@videojs/react` |
 | MODIFY | `src/presets/video/skin.tsx` | `@videojs/react` |
 | MODIFY | `src/index.ts` | `@videojs/react` |
-| NEW | `src/html-pip-overlay/` | `apps/sandbox` |
-| NEW | `src/react-pip-overlay/` | `apps/sandbox` |
+| NEW | `src/html-pip-overlay/index.html` | `apps/sandbox` |
+| NEW | `src/html-pip-overlay/main.ts` | `apps/sandbox` |
+| NEW | `src/react-pip-overlay/index.html` | `apps/sandbox` |
+| NEW | `src/react-pip-overlay/main.tsx` | `apps/sandbox` |
