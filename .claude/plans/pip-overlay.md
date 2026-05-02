@@ -1,6 +1,6 @@
 # PIP Overlay Implementation Plan
 
-**Status:** PLANNED
+**Status:** IN_PROGRESS
 
 Implementation plan for a custom draggable PIP overlay with synchronized time controls.
 
@@ -112,15 +112,15 @@ The feature reads it during sync events.
 
 | # | Title | Package | Files | Status |
 |---|-------|---------|-------|--------|
-| 1 | Core State Interface | `@videojs/core` | 1 | `[ ]` |
-| 2 | Store Feature | `@videojs/core` | 2 | `[ ]` |
-| 3 | Selectors & Exports | `@videojs/core` | 2 | `[ ]` |
-| 4 | PIP Overlay Element (HTML) | `@videojs/html` | 1 | `[ ]` |
-| 5 | PIP Toggle Button Element (HTML) | `@videojs/html` | 1 | `[ ]` |
-| 6 | PIP Source Element (HTML) | `@videojs/html` | 1 | `[ ]` |
-| 7 | CSS Styles | `@videojs/skins` | 1 | `[ ]` |
-| 8 | HTML Skin Integration | `@videojs/html` | 2 | `[ ]` |
-| 9 | HTML Package Exports | `@videojs/html` | 1 | `[ ]` |
+| 1 | Core State Interface | `@videojs/core` | 1 | `[x]` |
+| 2 | Store Feature | `@videojs/core` | 2 | `[x]` |
+| 3 | Selectors & Exports | `@videojs/core` | 2 | `[x]` |
+| 4 | PIP Overlay Element (HTML) | `@videojs/html` | 1 | `[x]` |
+| 5 | PIP Toggle Button Element (HTML) | `@videojs/html` | 1 | `[x]` |
+| 6 | PIP Source Element (HTML) | `@videojs/html` | 1 | `[x]` |
+| 7 | CSS Styles | `@videojs/skins` | 1 | `[x]` |
+| 8 | HTML Skin Integration | `@videojs/html` | 2 | `[x]` |
+| 9 | HTML Package Exports | `@videojs/html` | 1 | `[x]` |
 | 10 | React PipOverlay Component | `@videojs/react` | 1 | `[ ]` |
 | 11 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[ ]` |
 | 12 | React usePipOverlay Hook | `@videojs/react` | 1 | `[ ]` |
@@ -128,7 +128,7 @@ The feature reads it during sync events.
 | 14 | React Package Exports | `@videojs/react` | 1 | `[ ]` |
 | 15 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
 | 16 | React Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
-| 17 | Unit Tests | `@videojs/core` | 1 | `[ ]` |
+| 17 | Unit Tests | `@videojs/core` | 1 | `[x]` |
 | 18 | Verification | — | — | `[ ]` |
 
 ---
