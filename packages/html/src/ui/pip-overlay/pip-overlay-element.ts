@@ -40,6 +40,7 @@ export class PipOverlayElement extends MediaElement {
   #mutationObserver: MutationObserver | null = null;
   #bufferingTimer: ReturnType<typeof setTimeout> | null = null;
   #pausedByBuffering = false;
+  #toggleButton: HTMLElement | null = null;
 
   constructor() {
     super();
@@ -77,6 +78,10 @@ export class PipOverlayElement extends MediaElement {
     this.setAttribute('role', 'region');
     this.setAttribute('aria-label', 'Secondary video overlay');
     this.setAttribute('tabindex', '-1');
+  }
+
+  setToggleButton(el: HTMLElement): void {
+    this.#toggleButton = el;
   }
 
   override connectedCallback(): void {
@@ -219,6 +224,7 @@ export class PipOverlayElement extends MediaElement {
   readonly #onCloseClick = (e: MouseEvent) => {
     e.stopPropagation();
     this.pipOverlay.value?.hidePipOverlay();
+    this.#toggleButton?.focus();
   };
 
   readonly #onGestureClick = (e: MouseEvent) => {
@@ -292,6 +298,7 @@ export class PipOverlayElement extends MediaElement {
     if (e.key === 'Escape') {
       e.stopPropagation();
       state.hidePipOverlay();
+      this.#toggleButton?.focus();
       return;
     }
 
