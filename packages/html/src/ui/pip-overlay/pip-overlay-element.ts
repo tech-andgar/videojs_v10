@@ -42,6 +42,7 @@ export class PipOverlayElement extends MediaElement {
   #pausedByBuffering = false;
   #toggleButton: HTMLElement | null = null;
   #loadGeneration = 0;
+  #dragPointerId: number | null = null;
 
   constructor() {
     super();
@@ -164,6 +165,13 @@ export class PipOverlayElement extends MediaElement {
       this.dataset.active = '';
     } else {
       delete this.dataset.active;
+      // Cancel drag if overlay was hidden while dragging
+      if (this.#dragPointerId !== null) {
+        this.releasePointerCapture(this.#dragPointerId);
+        this.#dragPointerId = null;
+        delete this.dataset.dragging;
+        delete this.dataset.resizing;
+      }
     }
 
     if (state.pipOverlayRequiresGesture) {
@@ -252,6 +260,7 @@ export class PipOverlayElement extends MediaElement {
     const isResize = target.classList.contains('pip-overlay__resize');
 
     this.setPointerCapture(e.pointerId);
+    this.#dragPointerId = e.pointerId;
     if (isResize) {
       this.dataset.resizing = '';
     } else {
@@ -302,6 +311,7 @@ export class PipOverlayElement extends MediaElement {
         rafId = null;
       }
       this.releasePointerCapture(upEvt.pointerId);
+      this.#dragPointerId = null;
       delete this.dataset.dragging;
       delete this.dataset.resizing;
       globalThis.removeEventListener('pointermove', onPointerMove);
