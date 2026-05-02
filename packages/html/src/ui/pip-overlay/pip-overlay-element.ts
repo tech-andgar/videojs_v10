@@ -41,6 +41,7 @@ export class PipOverlayElement extends MediaElement {
   #bufferingTimer: ReturnType<typeof setTimeout> | null = null;
   #pausedByBuffering = false;
   #toggleButton: HTMLElement | null = null;
+  #loadGeneration = 0;
 
   constructor() {
     super();
@@ -183,13 +184,21 @@ export class PipOverlayElement extends MediaElement {
     this.style.setProperty('--pip-y', state.pipOverlayPosition.y.toString());
     this.style.setProperty('--pip-scale', state.pipOverlayScale.toString());
 
-    if (state.pipOverlaySrc && this.#video.src !== state.pipOverlaySrc) {
-      // Need to resolve to absolute URL for accurate comparison, but for simplicity:
-      const current = this.#video.getAttribute('src');
-      if (current !== state.pipOverlaySrc) {
-        this.#video.src = state.pipOverlaySrc;
-        this.#ariaLive.textContent = 'Secondary video source changed';
-      }
+    if (state.pipOverlaySrc && this.#video.getAttribute('src') !== state.pipOverlaySrc) {
+      this.#loadGeneration++;
+      const gen = this.#loadGeneration;
+      // Release old buffers before loading new source
+      this.#video.removeAttribute('src');
+      this.#video.load();
+      this.#video.src = state.pipOverlaySrc;
+      this.#ariaLive.textContent = 'Secondary video source changed';
+      // Store generation for stale-check in handlers
+      this.#video.dataset.gen = String(gen);
+    } else if (!state.pipOverlaySrc && this.#video.hasAttribute('src')) {
+      // Overlay hidden - release buffers
+      this.#video.removeAttribute('src');
+      this.#video.load();
+      delete this.#video.dataset.gen;
     }
   }
 
@@ -347,6 +356,8 @@ export class PipOverlayElement extends MediaElement {
   };
 
   readonly #onLoadedMetadata = () => {
+    const currentGen = this.#video.dataset.gen;
+    if (currentGen !== String(this.#loadGeneration)) return; // stale load
     if (this.#video.videoWidth && this.#video.videoHeight) {
       const ratio = this.#video.videoWidth / this.#video.videoHeight;
       this.style.setProperty('--pip-aspect', ratio.toString());
