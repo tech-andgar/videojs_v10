@@ -5,6 +5,7 @@ export * as features from './feature.parts';
 export * from './fullscreen';
 export * from './live';
 export * from './pip';
+export * from './pip-overlay';
 export * from './playback';
 export * from './playback-rate';
 export * from './presets';

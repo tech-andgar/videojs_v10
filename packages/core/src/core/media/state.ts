@@ -353,3 +353,36 @@ export interface MediaPictureInPictureState {
   /** Toggle picture-in-picture mode. */
   togglePictureInPicture(): Promise<void>;
 }
+
+export interface PipOverlaySource {
+  src: string;
+  lang?: string;
+  label?: string;
+}
+
+export type PipOverlayLoadingState = 'spinner' | 'black' | 'poster';
+export type PipOverlayAnimation = 'scale-fade' | 'fade' | 'slide' | 'none';
+
+export interface MediaPipOverlayState {
+  pipOverlayActive: boolean;
+  pipOverlaySrc: string | null;
+  pipOverlaySources: PipOverlaySource[];
+  pipOverlayLang: string | null;
+  pipOverlayPosition: { x: number; y: number };
+  pipOverlayScale: number;
+  pipOverlayConstrained: boolean;
+  pipOverlayLoadingState: PipOverlayLoadingState;
+  pipOverlayAnimation: PipOverlayAnimation;
+  pipOverlayError: string | null;
+  pipOverlayRequiresGesture: boolean;
+
+  showPipOverlay(src?: string): void;
+  hidePipOverlay(): void;
+  togglePipOverlay(src?: string): void;
+  setPipOverlayPosition(x: number, y: number): void;
+  setPipOverlayScale(scale: number): void;
+  setPipOverlaySources(sources: PipOverlaySource[]): void;
+  setPipOverlayLang(lang: string): void;
+  dismissPipOverlayError(): void;
+  resolvePipOverlayGesture(): void;
+}

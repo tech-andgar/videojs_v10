@@ -6,6 +6,7 @@ import { errorFeature } from './features/error';
 import { fullscreenFeature } from './features/fullscreen';
 import { liveFeature } from './features/live';
 import { pipFeature } from './features/pip';
+import { pipOverlayFeature } from './features/pip-overlay';
 import { playbackFeature } from './features/playback';
 import { playbackRateFeature } from './features/playback-rate';
 import { remotePlaybackFeature } from './features/remote-playback';
@@ -43,3 +44,5 @@ export const selectTextTrack = createSelector(textTrackFeature);
 export const selectTime = createSelector(timeFeature);
 /** Select the volume state (volume, muted, setVolume, setMuted). */
 export const selectVolume = createSelector(volumeFeature);
+/** Select the custom Picture-in-Picture overlay state and controls. */
+export const selectPipOverlay = createSelector(pipOverlayFeature);
