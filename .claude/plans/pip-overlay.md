@@ -10,6 +10,15 @@ Add a custom in-page Picture-in-Picture overlay that renders a secondary `<video
 
 **Platform support:** HTML (web components) + React. React Native is out of scope (planned, not yet implemented in the monorepo).
 
+## Required Skills
+
+Before implementing this plan, the following skills must be loaded/referenced to ensure alignment with Video.js v10 architecture and conventions:
+
+- **Store & Features:** Load `api/SKILL.md` (for `definePlayerFeature` and state patterns).
+- **UI Components:** Load `component/SKILL.md` (for HTML web components, React components, and styling conventions).
+- **Accessibility:** Load `aria/SKILL.md` (for keyboard navigation, focus management, and `aria-live` implementation).
+- **Media Synchronization:** Load `media-sync/SKILL.md` (for soft sync via playbackRate, bi-directional buffering, and Autoplay Policy fallback UI).
+
 ## Architecture
 
 ```
