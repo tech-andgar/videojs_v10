@@ -12,6 +12,7 @@ media-pip-overlay {
 
   /* Use CSS variables for position and scale, falling back to safe limits */
   width: calc(var(--pip-scale) * 100%);
+  min-width: 160px;
   aspect-ratio: var(--pip-aspect);
   overflow: hidden;
 
@@ -131,4 +132,37 @@ media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-on 
 }
 media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-off {
   display: block;
+}
+
+/* Touch devices: close button always visible (no hover needed) */
+@media (hover: none) {
+  media-pip-overlay[data-active] .pip-overlay__close {
+    opacity: 1;
+  }
+}
+
+/* Reduced motion: disable all transitions/animations (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  media-pip-overlay,
+  media-pip-overlay .pip-overlay__close,
+  media-pip-overlay .pip-overlay__resize {
+    transition: none;
+  }
+}
+
+/* Windows High Contrast / forced-colors */
+@media (forced-colors: active) {
+  media-pip-overlay {
+    border: 2px solid ButtonText;
+  }
+
+  media-pip-overlay .pip-overlay__close {
+    background: Canvas;
+    color: ButtonText;
+    border: 1px solid ButtonText;
+  }
+
+  media-pip-overlay .pip-overlay__resize {
+    background: ButtonText;
+  }
 }
