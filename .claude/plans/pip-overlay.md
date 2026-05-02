@@ -54,53 +54,84 @@ Not included in `videoFeatures` by default — opt-in only.
 
 ## Decisions
 
+### Core Behavior
+
 | Topic | Decision | Notes |
 |-------|----------|-------|
 | Source config | Hybrid (C) | Attribute `pip-src` + `<pip-source>` children + programmatic API |
-| Time sync strategy | Soft Catch-up | Adjust `playbackRate` for small drifts (< 2s). Hard `seek` only for large drifts to avoid micro-stuttering. |
-| Buffering sync | Bi-directional (debounced) | If PIP stalls (buffering) for >500ms, main video pauses. Cancel if PIP recovers within threshold. |
-| PIP controls | None | Silent sync — no play/pause/seek controls on PIP |
-| Multiple PIPs | One (v1 tradeoff) | Singular state shape (`pipOverlaySrc`, `pipOverlayPosition`). Intentional v1 simplification — multi-PIP would require array-based state redesign. Documented tradeoff, not a future-proof shape. |
-| Position bounds | Constrained | Restricted to container. Clamps automatically on container resize. |
-| Resize | Yes | Corner resize handles |
-| Toggle button | Yes | Button in control bar |
 | Multi-source/lang | Yes | `<pip-source data-lang="es" src="...">` children. Uses `data-lang` (not `lang`) to avoid semantic conflict with HTML `lang` attribute. |
-| Audio | Always muted | **Important:** User's responsibility to provide audio-less video file to save bandwidth. |
-| Autoplay Policy | Fallback UI (Idea A) | If PIP `play()` is blocked by browser, main video continues, PIP shows a "Tap to Play" overlay button. |
-| Aspect ratio | Auto-detect | Read `videoWidth/videoHeight` on `loadedmetadata` |
-| Loading state | Spinner | Options: `spinner` / `black` / `poster` |
-| Error handling | Show in overlay (configurable) | Configurable by admin/user |
-| Keyboard shortcut | Configurable | Via `<media-hotkey keys="p" action="togglePipOverlay">` |
-| Mobile (<640px) | Larger min scale | 40% instead of 28% |
+| Audio | Always muted | User's responsibility to provide audio-less video file to save bandwidth. |
+| PIP controls | None | Silent sync — no play/pause/seek controls on PIP |
+| Multiple PIPs | One (v1 tradeoff) | Singular state shape (`pipOverlaySrc`, `pipOverlayPosition`). Multi-PIP would require array-based state redesign. |
 | Native PIP coexistence | Both active | Overlay and native PIP can coexist |
-| Fullscreen | Container fullscreen forced | When PIP active, always use container fullscreen (never `webkitSetPresentationMode`). Prevents iOS Safari ripping `<video>` from DOM. If container fullscreen unavailable, show warning. |
-| RTL support | Position flip | Default position flips `x` in RTL layouts via `isRTL()`. Arrow key movement also flips horizontal direction. |
-| Touch close | Hybrid auto-detect | `@media (hover: none)`: close button always visible. `@media (hover: hover)`: reveal on hover/focus-within. |
+| Toggle button | Yes | Button in control bar |
+| Keyboard shortcut | Configurable | Via `<media-hotkey keys="p" action="togglePipOverlay">` |
+
+### Layout & Interaction
+
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| Position bounds | Constrained | Restricted to container. Clamps on resize. |
+| Initial position | Bottom-right | `{ x: 0.78, y: 0.72 }` default. Flips in RTL via `isRTL()`. |
 | Snap-to-corner | No | Free position — stays where user drops it |
+| Resize | Yes | Corner resize handles |
+| Min overlay size | 160px minimum | Prevents unreadable gesture prompt on small containers (<320px). |
+| Aspect ratio | Auto-detect | `videoWidth/videoHeight` on `loadedmetadata`. Default `16/9` until loaded. No layout jump on error. |
 | Animation | Scale+fade (configurable) | Options: `scale-fade` / `fade` / `slide` / `none` |
-| Accessibility | Advanced | ARIA roles, `aria-live` announcements, keyboard drag (Arrow keys) & resize (Shift+Arrow). |
-| Focus order | After controls | Overlay `tabindex="-1"` (not in tab order). Focus moves to overlay only via toggle button activation. Escape closes and returns focus to toggle. |
-| Escape key | Overlay-scoped | When overlay focused, Escape closes overlay (`stopPropagation`). Does not exit fullscreen. |
+| Loading state | Spinner | Options: `spinner` / `black` / `poster` |
+| Error handling | Show in overlay | Configurable by admin/user |
+
+### Synchronization
+
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| Time sync | Soft Catch-up | `playbackRate` for drifts 0.3s–2s. Hard `seek` for > 2s. |
+| Buffering sync | Bi-directional (debounced) | 500ms threshold before pausing main. Cancel if PIP recovers within window. |
+| Autoplay Policy | Fallback UI | PIP shows "Tap to Play" overlay button on `NotAllowedError`. Main continues. |
+| Live streams | Skip sync | `duration === Infinity` → no drift calc. PIP plays independently from live edge. |
+| Page visibility | Hard re-sync | On `visibilitychange` → `visible`, force `currentTime` + `playbackRate` sync. |
+| DRM content | Not supported | `__DEV__` warning if main uses `mediaKeys`. Document limitation. |
+
+### Security
+
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| URL sanitization | Allowlist | Only `http:`, `https:`, `blob:` URIs. Reject `javascript:`, `data:`. Validate in `showPipOverlay()` and `setPipOverlaySources()`. |
+| CORS | Inherit from main | Fallback to own `crossorigin` attribute. |
+| CORS error messaging | Opaque-aware | Generic "Failed to load secondary video" + `__DEV__` console suggestion to check CORS headers. |
+
+### Accessibility
+
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| ARIA | Advanced | `role="region"`, `aria-live` announcements, keyboard drag/resize. |
+| Focus order | After controls | `tabindex="-1"`. Focus via toggle button activation only. Escape returns focus to toggle. |
+| Escape key | Overlay-scoped | `stopPropagation()` — does not exit fullscreen. |
 | aria-live strings | Defined | "Secondary video opened", "Secondary video closed", "Secondary video error: {message}", "Secondary video resumed". |
-| Min overlay size | 160px minimum | `min-width: 160px` prevents unreadable gesture prompt on very small containers (<320px). |
-| Initial position | Bottom-right (configurable) | `{ x: 0.78, y: 0.72 }` default |
-| CORS | Inherit from main | Fallback to own `crossorigin` attribute |
+| Reduced motion | Respect | `@media (prefers-reduced-motion: reduce)`: disable all transitions/animations. WCAG 2.3.3. |
+| Forced colors | System colors | `@media (forced-colors: active)`: `ButtonText`, `Canvas` for interactive elements. |
+| RTL support | Position flip | Default x flips. Arrow key movement flips horizontal direction. |
+
+### Mobile & Platform
+
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| Mobile (<640px) | Larger min scale | 40% instead of 28% |
+| Touch close | Hybrid auto-detect | `@media (hover: none)`: always visible. `@media (hover: hover)`: reveal on hover/focus-within. |
+| Fullscreen | Container forced | When PIP active, never fall back to `webkitSetPresentationMode`. Prevents iOS Safari DOM removal. |
+| iOS video limit | Detect + warn | `__DEV__` warning on `MEDIA_ERR_DECODE`. Hardware limit, no runtime workaround. |
+| Orientation change | Re-clamp | ResizeObserver + `requestAnimationFrame` for post-rotation position clamp. |
 | ResizeObserver | Yes | Container size dictates mobile scale and dynamic position clamping. |
-| URL sanitization | Allowlist | Only `http:`, `https:`, `blob:` URIs accepted for `pip-src` / `<pip-source src>`. Reject `javascript:`, `data:`, others. Validate in `showPipOverlay()` and `setPipOverlaySources()`. |
-| CORS error messaging | Opaque-aware | Browser won't reveal CORS failure reason. Show generic "Failed to load secondary video" + suggest checking CORS headers in dev console (`__DEV__` warning). |
-| Memory cleanup | Explicit release | On source change or hide: `video.removeAttribute('src')` + `video.load()` to release buffers. Prevents mobile memory pressure. |
-| Load abort | Cancel pending | Rapid toggle/source change aborts pending loads via src clear before setting new src. Prevents stacked load requests. |
-| iOS video limit | Detect + warn | `__DEV__` warning if second `<video>` fails to decode. No runtime workaround — hardware limit. Document in API docs. |
-| Live streams | Skip sync | If main video is live (`duration === Infinity`), disable drift-based sync. PIP plays independently from same live edge. Document: live PIP sync is best-effort. |
-| DRM content | Not supported | PIP overlay does not support EME/DRM sources. `__DEV__` warning if main video uses `mediaKeys`. Document limitation. |
-| Drag cancellation | Auto-cancel | If `pipOverlayActive` becomes `false` during drag, release pointer capture and reset drag state. Prevents orphaned pointer events. |
-| Aspect ratio fallback | Graceful | Default `--pip-aspect: 16/9` until `loadedmetadata`. If video errors before metadata, keep default. No layout jump. |
-| Orientation change | Re-clamp | ResizeObserver handles this. Add `requestAnimationFrame` after resize to ensure position clamps after rotation animation completes. |
-| Reduced motion | Respect | `@media (prefers-reduced-motion: reduce)`: disable all transitions/animations (open/close/drag). WCAG 2.3.3. |
-| Page visibility | Hard re-sync | On `visibilitychange` → `visible`, force hard `currentTime` sync. Browsers throttle/pause `<video>` in hidden tabs → silent drift. |
-| Source load race | Generation counter | Increment counter on each source change. Ignore load completions from stale generations. Prevents fast toggle showing wrong source. |
-| Drag perf | rAF batching | Batch `pointermove` → `setPipOverlayPosition()` via `requestAnimationFrame`. Prevents layout thrashing on 120Hz+ displays. |
-| Forced colors | System colors | `@media (forced-colors: active)`: close button and resize handles use system colors (`ButtonText`, `Canvas`). Prevents invisible controls in Windows High Contrast. |
+
+### Performance & Stability
+
+| Topic | Decision | Notes |
+|-------|----------|-------|
+| Memory cleanup | Explicit release | On source change/hide: clear src + `load()` to release buffers. |
+| Load abort | Cancel pending | Clear src before setting new src on rapid toggle. |
+| Source load race | Generation counter | Increment on source change. Ignore stale load completions. |
+| Drag perf | rAF batching | Batch `pointermove` via `requestAnimationFrame`. Prevents 120Hz+ layout thrashing. |
+| Drag cancellation | Auto-cancel | Release pointer capture if `pipOverlayActive` becomes `false` during drag. |
 
 ## Source Resolution Priority
 
@@ -112,20 +143,20 @@ Not included in `videoFeatures` by default — opt-in only.
 
 ## Synchronization
 
-Main video ↔ PIP video:
+Main video ↔ PIP video. PIP `<video>` registered on container via `Symbol('@videojs/pip-overlay-media')`.
 
-| Event | Action |
-|-------|--------|
-| `play` | `pipMedia.play().catch(showUnlockButton)` |
-| `pause` | `pipMedia.pause()` |
-| `seeked` | `pipMedia.currentTime = media.currentTime` |
-| `timeupdate` | If drift 0.3s-2s: adjust `pipMedia.playbackRate`. If > 2s: force `currentTime` |
-| `ratechange` | Base `pipMedia.playbackRate = media.playbackRate` |
-| `pipMedia:waiting` | `media.pause()` (Wait for PIP to buffer) |
-| `pipMedia:playing` | `media.play()` (Resume main when PIP recovers) |
-
-The PIP `<video>` element is registered on the container via `Symbol('@videojs/pip-overlay-media')`.
-The feature reads it during sync events.
+| Event | Action | Condition |
+|-------|--------|-----------|
+| `play` | `pipMedia.play().catch(showUnlockButton)` | — |
+| `pause` | `pipMedia.pause()` | — |
+| `seeked` | `pipMedia.currentTime = media.currentTime` | VOD only (skip if live) |
+| `timeupdate` | Soft sync: adjust `playbackRate` ±10% | Drift 0.3s–2s, VOD only |
+| `timeupdate` | Hard sync: force `currentTime` | Drift > 2s, VOD only |
+| `ratechange` | `pipMedia.playbackRate = media.playbackRate` | — |
+| `pipMedia:waiting` | `media.pause()` after 500ms debounce | Cancel if PIP recovers within threshold |
+| `pipMedia:playing` | `media.play()` | Only if main was paused by buffering sync |
+| `visibilitychange` | Hard re-sync `currentTime` + `playbackRate` | On tab return, VOD only |
+| `duration === Infinity` | Skip all drift-based sync | Live streams |
 
 ---
 
@@ -142,15 +173,17 @@ The feature reads it during sync events.
 | 7 | CSS Styles | `@videojs/skins` | 1 | `[x]` |
 | 8 | HTML Skin Integration | `@videojs/html` | 2 | `[x]` |
 | 9 | HTML Package Exports | `@videojs/html` | 1 | `[x]` |
-| 10 | React PipOverlay Component | `@videojs/react` | 1 | `[ ]` |
-| 11 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[ ]` |
-| 12 | React usePipOverlay Hook | `@videojs/react` | 1 | `[ ]` |
-| 13 | React Skin Integration | `@videojs/react` | 1 | `[ ]` |
-| 14 | React Package Exports | `@videojs/react` | 1 | `[ ]` |
-| 15 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
-| 16 | React Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
-| 17 | Unit Tests | `@videojs/core` | 1 | `[x]` |
-| 18 | Verification | — | — | `[ ]` |
+| 10 | Unit Tests (Core) | `@videojs/core` | 1 | `[x]` |
+| 11 | **Retroactive Updates** | `@videojs/core`, `@videojs/html`, `@videojs/skins` | — | `[ ]` |
+| 12 | React PipOverlay Component | `@videojs/react` | 1 | `[ ]` |
+| 13 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[ ]` |
+| 14 | React usePipOverlay Hook | `@videojs/react` | 1 | `[ ]` |
+| 15 | React Skin Integration | `@videojs/react` | 1 | `[ ]` |
+| 16 | React Package Exports | `@videojs/react` | 1 | `[ ]` |
+| 17 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
+| 18 | React Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
+| 19 | Full Test Checklist | `@videojs/core` | 1 | `[ ]` |
+| 20 | Verification | — | — | `[ ]` |
 
 ---
 
@@ -694,76 +727,75 @@ export { PipSourceElement } from './ui/pip-overlay/pip-source-element';
 
 ---
 
-## Phase 10: Sandbox Demo
+## Phase 10: Unit Tests (Core)
 
-### `apps/sandbox/src/html-pip-overlay/index.html` (new)
+### `packages/core/src/dom/store/features/tests/pip-overlay.test.ts`
 
-```html
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sandbox — HTML PIP Overlay</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="./main.ts"></script>
-  </body>
-</html>
-```
-
-### `apps/sandbox/src/html-pip-overlay/main.ts` (new)
-
-Demo with:
-- Main video player with full controls
-- `pip-src` pointing to secondary video
-- PIP overlay toggle button in controls
-- Hotkey `p` for toggle: `<media-hotkey keys="p" action="togglePipOverlay">`
-- Multi-language demo with `<pip-source>` elements
+> Already implemented. See Phase 19 for the full test list including retroactive additions.
 
 ---
 
-## Phase 11: Unit Tests
+## Phase 11: Retroactive Updates
 
-### `packages/core/src/dom/store/features/tests/pip-overlay.test.ts` (new)
+Decisions added after phases 1–9 were completed. These must be applied to existing code before continuing.
 
-Tests to write:
+### Phase 2 updates (`pip-overlay.ts`)
 
-- **State actions:**
-  - `showPipOverlay()` sets active + resolves src
-  - `hidePipOverlay()` clears active
-  - `togglePipOverlay()` toggles
-  - `setPipOverlayPosition()` clamps when constrained
-  - `setPipOverlayScale()` clamps to 0.15-0.5
-  - `setPipOverlaySources()` + auto-select first source
-  - `setPipOverlayLang()` selects matching source
-  - `dismissPipOverlayError()` clears error
+- [ ] Add `isAllowedSrc()` URL validation to `showPipOverlay()` and `setPipOverlaySources()`
+- [ ] Add `isLive()` guard to `syncTime` and `seeked` handler
+- [ ] Add `visibilitychange` listener for hard re-sync on tab return
+- [ ] Add 500ms debounce to bi-directional buffering (`waiting`/`playing`)
+- [ ] Add `isRTL()` default position flip in `attach()`
+- [ ] Add DRM `__DEV__` warning in `attach()`
+- [ ] Add `requestAnimationFrame` in ResizeObserver for orientation re-clamp
+- [ ] Replace `(container as any)` with typed `getPipMedia()` helper
 
-- **Source resolution priority:**
-  - Programmatic src wins over stored src
-  - Stored src wins over sources[0]
-  - No source → no-op
+### Phase 4 updates (`pip-overlay-element.ts`)
 
-- **Sync (with mocked media):**
-  - `timeupdate` → syncs PIP currentTime when drift > 0.3s
-  - `seeked` → always syncs PIP currentTime
-  - `play` → calls PIP play()
-  - `pause` → calls PIP pause()
-  - `ratechange` → syncs PIP playbackRate
+- [ ] Add `tabindex="-1"` (was `0`), focus via toggle button only
+- [ ] Add `stopPropagation()` on Escape key
+- [ ] Add focus return to toggle button on close
+- [ ] Add rAF batching for `pointermove` → `setPipOverlayPosition()`
+- [ ] Add `#loadGeneration` counter for source race prevention
+- [ ] Add memory cleanup on source change / hide (`removeAttribute('src')` + `load()`)
+- [ ] Add drag cancellation on `pipOverlayActive` → `false`
+- [ ] Add iOS `MEDIA_ERR_DECODE` `__DEV__` warning
+- [ ] Add fullscreen guard (intercept `webkitPresentationMode`)
 
-- **Mobile:**
-  - Container width < 640 → scale adjusts to 0.4
+### Phase 5 updates (`pip-overlay-toggle-element.ts`)
+
+- [ ] Store ref for focus return from overlay Escape
+
+### Phase 6 updates (`pip-source-element.ts`)
+
+- [ ] Change `lang` attribute to `data-lang`
+
+### Phase 7 updates (CSS)
+
+- [ ] Add `touch-action: none` on `[data-active]`
+- [ ] Add `min-width: 160px`
+- [ ] Add `@media (hover: none)` close button always visible
+- [ ] Add `@media (prefers-reduced-motion: reduce)` disable all transitions
+- [ ] Add `@media (forced-colors: active)` system colors for interactive elements
+
+### Phase 10 updates (unit tests)
+
+- [ ] Add URL sanitization tests
+- [ ] Add live stream sync skip tests
+- [ ] Add page visibility re-sync tests
+- [ ] Add source load race (generation counter) tests
+- [ ] Add debounced buffering tests
+- [ ] Add RTL default position tests
+- [ ] Add drag cancellation tests
+- [ ] Add rAF batching tests
 
 ---
 
-## Phase 10: React PipOverlay Component
+## Phase 12: React PipOverlay Component
 
 ### `packages/react/src/ui/pip-overlay/pip-overlay.tsx` (new)
 
 `<PipOverlay>` — React equivalent of `<media-pip-overlay>`.
-
-Follows the same pattern as other React UI components in the codebase:
 
 ```tsx
 'use client';
@@ -781,15 +813,11 @@ export function PipOverlay({ className, src, crossOrigin }: PipOverlayProps): Re
   const pipOverlay = usePlayer(selectPipOverlay);
   const container = useContainer();
   const videoRef = useRef<HTMLVideoElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [loadGeneration] = useState(() => ({ current: 0 }));
+  const [dragFrame] = useState(() => ({ current: 0 }));
 
-  // Register PIP video on container via symbol
-  // Handle drag/resize via pointer events
-  // Sync src, auto-detect aspect ratio
-  // Handle Keyboard A11y for drag/resize via onKeyDown
-  // Handle Bi-directional buffering via onWaiting/onPlaying
-  // Render: <div role="region"> + <video muted playsinline> + close button + resize handles
-  // Fallback UI: if pipOverlay.pipOverlayRequiresGesture, render unlock button over video
-  // ARIA: aria-label, tabIndex, Escape to close, focus management, aria-live region
+  // ... implementation
 }
 
 export namespace PipOverlay {
@@ -797,17 +825,42 @@ export namespace PipOverlay {
 }
 ```
 
+**All responsibilities (mirrors HTML element):**
+
+1. Render `<video muted playsInline>` via `videoRef`
+2. `useEffect`: register/unregister `videoRef` on container via `PIP_OVERLAY_MEDIA_SYMBOL`
+3. CSS custom properties: `--pip-x`, `--pip-y`, `--pip-scale`, `--pip-aspect`
+4. **Drag** via `onPointerDown` → `setPointerCapture` → `onPointerMove` → `onPointerUp`
+5. **Drag rAF batching**: store latest position in ref, apply via `requestAnimationFrame` (120Hz+ safe)
+6. **Resize**: corner handles, same pointer pattern → `setPipOverlayScale()`
+7. Close button → `hidePipOverlay()` + return focus to toggle
+8. Aspect ratio: `onLoadedMetadata` → `videoWidth/videoHeight` → `--pip-aspect`
+9. Crossorigin: inherit from main `<video>`, fallback to prop
+10. Error: `onError` → `pipOverlayError`. `MEDIA_ERR_DECODE` → `__DEV__` iOS warning
+11. Loading: `data-loading` until `onCanPlay`
+12. **Keyboard**: `onKeyDown` — Arrow keys move (±0.05), Shift+Arrow resize (±0.05). **RTL**: flip horizontal via `isRTL()`
+13. **Escape**: `stopPropagation()` — close overlay, don't exit fullscreen. Return focus to toggle.
+14. **Autoplay fallback**: if `pipOverlayRequiresGesture`, render "Tap to Play" overlay button
+15. **Bi-directional buffering**: `onWaiting`/`onPlaying` delegate to store debounced logic
+16. **Fullscreen guard**: intercept `webkitPresentationMode` change while PIP active
+17. **aria-live**: visually hidden region with specific strings ("opened", "closed", "error: {msg}", "resumed")
+18. **Min size**: `min-width: 160px`
+19. **Drag cancellation**: `useEffect` watches `pipOverlayActive` — if `false` during drag, release pointer capture
+20. **Memory cleanup**: on src change or unmount: `video.removeAttribute('src')` + `video.load()`
+21. **Source generation counter**: increment `loadGeneration.current` on src change, ignore stale `onLoadedMetadata`/`onCanPlay`
+22. `tabindex={-1}` — not in tab order, focused via toggle button
+
 **Key differences from HTML element:**
-- Uses `usePlayer(selectPipOverlay)` instead of `PlayerController`
-- Uses `useContainer()` to access the container for symbol registration
-- Uses React refs for the internal `<video>` element
-- Uses `useEffect` for lifecycle (register/unregister symbol, event listeners)
-- Uses `useCallback` for drag/resize handlers
-- Renders JSX directly instead of imperative DOM
+- `usePlayer(selectPipOverlay)` instead of `PlayerController`
+- `useContainer()` for symbol registration
+- React refs for `<video>` and overlay `<div>`
+- `useEffect` for lifecycle (symbol register, event listeners, cleanup)
+- `useCallback` for drag/resize handlers (stable refs for pointer capture)
+- JSX render instead of imperative DOM
 
 ---
 
-## Phase 11: React PipOverlayToggle Component
+## Phase 13: React PipOverlayToggle Component
 
 ### `packages/react/src/ui/pip-overlay/pip-overlay-toggle.tsx` (new)
 
@@ -855,7 +908,7 @@ export namespace PipOverlayToggle {
 
 ---
 
-## Phase 12: React usePipOverlay Hook
+## Phase 14: React usePipOverlay Hook
 
 ### `packages/react/src/ui/pip-overlay/use-pip-overlay.ts` (new)
 
@@ -888,7 +941,7 @@ function MyComponent() {
 
 ---
 
-## Phase 13: React Skin Integration
+## Phase 15: React Skin Integration
 
 ### `packages/react/src/presets/video/skin.tsx`
 
@@ -917,7 +970,7 @@ Add PipOverlay and PipOverlayToggle to the VideoSkin component:
 
 ---
 
-## Phase 14: React Package Exports
+## Phase 16: React Package Exports
 
 ### `packages/react/src/index.ts`
 
@@ -929,7 +982,7 @@ Add PipOverlay and PipOverlayToggle to the VideoSkin component:
 
 ---
 
-## Phase 15: HTML Sandbox Demo
+## Phase 17: HTML Sandbox Demo
 
 ### `apps/sandbox/src/html-pip-overlay/` (new)
 
@@ -943,7 +996,7 @@ HTML sandbox with `<video-player>`, `<video-skin pip-src="...">`, PIP overlay to
 
 ---
 
-## Phase 16: React Sandbox Demo
+## Phase 18: React Sandbox Demo
 
 ### `apps/sandbox/src/react-pip-overlay/` (new)
 
@@ -980,87 +1033,94 @@ function App() {
 
 ---
 
-## Phase 17: Unit Tests
+## Phase 19: Full Test Checklist
 
-### `packages/core/src/dom/store/features/tests/pip-overlay.test.ts` (new)
+### `packages/core/src/dom/store/features/tests/pip-overlay.test.ts`
 
-Tests to write:
+Comprehensive test list. Phase 10 covers the baseline (marked `[x]`). Phase 11 retroactive additions marked `[ ]`.
 
-- **State actions:**
-  - `showPipOverlay()` sets active + resolves src
-  - `hidePipOverlay()` clears active
-  - `togglePipOverlay()` toggles
-  - `setPipOverlayPosition()` clamps when constrained
-  - `setPipOverlayScale()` clamps to 0.15-0.5
-  - `setPipOverlaySources()` + auto-select first source
-  - `setPipOverlayLang()` selects matching source
-  - `dismissPipOverlayError()` clears error
-  - `resolvePipOverlayGesture()` clears gesture block flag
+**State actions:**
 
-- **Source resolution priority:**
-  - Programmatic src wins over stored src
-  - Stored src wins over sources[0]
-  - No source → no-op
+- [x] `showPipOverlay()` sets active + resolves src
+- [x] `hidePipOverlay()` clears active
+- [x] `togglePipOverlay()` toggles
+- [x] `setPipOverlayPosition()` clamps when constrained
+- [x] `setPipOverlayScale()` clamps to 0.15–0.5
+- [x] `setPipOverlaySources()` + auto-select first source
+- [x] `setPipOverlayLang()` selects matching source
+- [x] `dismissPipOverlayError()` clears error
+- [x] `resolvePipOverlayGesture()` clears gesture block flag
 
-- **Sync (with mocked media):**
-  - `timeupdate` → syncs PIP currentTime by adjusting `playbackRate` (soft sync) when drift > 0.3s.
-  - `timeupdate` → hard syncs `currentTime` only when drift > 2s.
-  - `seeked` → always syncs PIP currentTime
-  - `play` → calls PIP play()
-  - `pause` → calls PIP pause()
-  - `ratechange` → syncs PIP playbackRate
+**Source resolution priority:**
 
-- **Bi-directional Buffering (debounced):**
-  - PIP `waiting` event does NOT immediately pause main — waits 500ms.
-  - PIP `playing` within 500ms cancels pause (no pause occurs).
-  - PIP `waiting` > 500ms pauses main media.
-  - PIP `playing` after pause resumes main media.
+- [x] Programmatic src wins over stored src
+- [x] Stored src wins over sources[0]
+- [x] No source → no-op
 
-- **RTL:**
-  - Default position flips to `x: 0.22` when container is RTL.
-  - Non-default position unchanged in RTL.
+**Sync (mocked media, VOD):**
 
-- **Fullscreen Guard:**
-  - When PIP active, fullscreen uses container (not native video).
-  - Sets `pipOverlayError` if container fullscreen unavailable on iOS.
+- [x] `timeupdate` → soft sync `playbackRate` when drift 0.3s–2s
+- [x] `timeupdate` → hard sync `currentTime` when drift > 2s
+- [x] `seeked` → syncs PIP `currentTime`
+- [x] `play` → calls PIP `play()`
+- [x] `pause` → calls PIP `pause()`
+- [x] `ratechange` → syncs PIP `playbackRate`
 
-- **Mobile & ResizeObserver:**
-  - Container resize width < 640 → scale adjusts to 0.4.
-  - Position re-clamps on container resize.
-  - Position re-clamps after orientation change (rAF delay).
+**URL sanitization:**
 
-- **URL sanitization:**
-  - `showPipOverlay('javascript:alert(1)')` → blocked, sets error.
-  - `showPipOverlay('https://example.com/v.mp4')` → allowed.
-  - `showPipOverlay('data:text/html,...')` → blocked.
-  - `setPipOverlaySources()` filters out unsafe URLs.
+- [ ] `showPipOverlay('javascript:alert(1)')` → blocked, sets error
+- [ ] `showPipOverlay('https://example.com/v.mp4')` → allowed
+- [ ] `showPipOverlay('data:text/html,...')` → blocked
+- [ ] `showPipOverlay('blob:...')` → allowed
+- [ ] `setPipOverlaySources()` filters unsafe URLs, keeps safe ones
 
-- **Live streams:**
-  - `duration === Infinity` → `syncTime` skipped (no drift calc).
-  - `seeked` with live → no PIP currentTime sync.
+**Bi-directional buffering (debounced):**
 
-- **Memory cleanup:**
-  - Source change → old video src cleared + `load()` called.
-  - `hidePipOverlay()` → video src released.
+- [ ] PIP `waiting` does NOT immediately pause main
+- [ ] PIP `playing` within 500ms cancels pending pause
+- [ ] PIP `waiting` > 500ms pauses main
+- [ ] PIP `playing` after pause resumes main
 
-- **Drag cancellation:**
-  - `pipOverlayActive` set to `false` during drag → pointer capture released, drag state reset.
+**Live streams:**
 
-- **Page visibility re-sync:**
-  - Hide tab → wait 10s → return → PIP `currentTime` hard syncs to main.
-  - Hide tab → return → PIP `playbackRate` matches main.
-  - Live stream: no re-sync on tab return.
+- [ ] `duration === Infinity` → `syncTime` skipped
+- [ ] `seeked` with live → no PIP `currentTime` sync
+- [ ] `visibilitychange` with live → no re-sync
 
-- **Source load race:**
-  - `showPipOverlay('a.mp4')` then immediately `showPipOverlay('b.mp4')` → only `b.mp4` displays.
-  - Stale `loadedmetadata` from `a.mp4` ignored via generation counter.
+**Page visibility:**
 
-- **Drag perf:**
-  - Multiple `pointermove` events within single frame → only one `setPipOverlayPosition()` call (rAF batched).
+- [ ] Tab hidden → return → PIP `currentTime` hard syncs
+- [ ] Tab hidden → return → PIP `playbackRate` matches main
+
+**RTL:**
+
+- [ ] Default position flips to `x: 0.22` in RTL
+- [ ] Non-default position unchanged in RTL
+
+**Fullscreen guard:**
+
+- [ ] PIP active → fullscreen uses container
+- [ ] Sets `pipOverlayError` if container fullscreen unavailable
+
+**Mobile & resize:**
+
+- [x] Container < 640px → scale adjusts to 0.4
+- [x] Position re-clamps on resize
+- [ ] Position re-clamps after orientation (rAF delay)
+
+**Source load race:**
+
+- [ ] Rapid `showPipOverlay('a')` then `showPipOverlay('b')` → only `b` displays
+- [ ] Stale `loadedmetadata` ignored via generation counter
+
+**Drag:**
+
+- [ ] `pipOverlayActive` → `false` during drag releases pointer capture
+- [ ] Multiple `pointermove` in one frame → single `setPipOverlayPosition()` (rAF)
 
 ---
 
-## Phase 18: Verification
+## Phase 20: Verification
 
 ### Automated
 
