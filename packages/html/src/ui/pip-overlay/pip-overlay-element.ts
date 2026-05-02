@@ -264,22 +264,34 @@ export class PipOverlayElement extends MediaElement {
 
     const rect = container.getBoundingClientRect();
 
-    const onPointerMove = (moveEvt: PointerEvent) => {
-      const deltaX = moveEvt.clientX - startX;
-      const deltaY = moveEvt.clientY - startY;
+    let rafId: number | null = null;
+    let latestMoveEvt: PointerEvent | null = null;
 
-      if (isResize) {
-        // Simple scale calculation based on X movement
-        const deltaScale = deltaX / rect.width;
-        state.setPipOverlayScale(startScale + deltaScale);
-      } else {
-        const deltaPosX = deltaX / rect.width;
-        const deltaPosY = deltaY / rect.height;
-        state.setPipOverlayPosition(startPosX + deltaPosX, startPosY + deltaPosY);
-      }
+    const onPointerMove = (moveEvt: PointerEvent) => {
+      latestMoveEvt = moveEvt;
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(() => {
+        rafId = null;
+        if (!latestMoveEvt) return;
+        const deltaX = latestMoveEvt.clientX - startX;
+        const deltaY = latestMoveEvt.clientY - startY;
+
+        if (isResize) {
+          const deltaScale = deltaX / rect.width;
+          state.setPipOverlayScale(startScale + deltaScale);
+        } else {
+          const deltaPosX = deltaX / rect.width;
+          const deltaPosY = deltaY / rect.height;
+          state.setPipOverlayPosition(startPosX + deltaPosX, startPosY + deltaPosY);
+        }
+      });
     };
 
     const onPointerUp = (upEvt: PointerEvent) => {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
       this.releasePointerCapture(upEvt.pointerId);
       delete this.dataset.dragging;
       delete this.dataset.resizing;
