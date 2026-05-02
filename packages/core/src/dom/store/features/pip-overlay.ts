@@ -69,6 +69,10 @@ export const pipOverlayFeature = definePlayerFeature({
       }
     },
 
+    setPipOverlayError(error) {
+      set({ pipOverlayError: error });
+    },
+
     dismissPipOverlayError() {
       set({ pipOverlayError: null });
     },

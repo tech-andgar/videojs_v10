@@ -4,6 +4,9 @@ import { AlertDialogTitleElement } from '../../ui/alert-dialog/alert-dialog-titl
 import { ControlsElement } from '../../ui/controls/controls-element';
 import { ControlsGroupElement } from '../../ui/controls/controls-group-element';
 import { ErrorDialogElement } from '../../ui/error-dialog/error-dialog-element';
+import { PipOverlayElement } from '../../ui/pip-overlay/pip-overlay-element';
+import { PipOverlayToggleElement } from '../../ui/pip-overlay/pip-overlay-toggle-element';
+import { PipSourceElement } from '../../ui/pip-overlay/pip-source-element';
 import { SliderBufferElement } from '../../ui/slider/slider-buffer-element';
 import { SliderElement } from '../../ui/slider/slider-element';
 import { SliderFillElement } from '../../ui/slider/slider-fill-element';
@@ -64,4 +67,10 @@ export function defineTimeSlider(): void {
 export function defineVolumeSlider(): void {
   safeDefine(VolumeSliderElement);
   defineSliderParts();
+}
+
+export function definePipOverlay(): void {
+  safeDefine(PipOverlayElement);
+  safeDefine(PipOverlayToggleElement);
+  safeDefine(PipSourceElement);
 }

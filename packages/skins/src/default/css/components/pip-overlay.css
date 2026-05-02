@@ -1,0 +1,134 @@
+media-pip-overlay {
+  --pip-x: 1;
+  --pip-y: 1;
+  --pip-scale: 0.28;
+  --pip-aspect: 16 / 9;
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 50;
+
+  display: none;
+
+  /* Use CSS variables for position and scale, falling back to safe limits */
+  width: calc(var(--pip-scale) * 100%);
+  aspect-ratio: var(--pip-aspect);
+  overflow: hidden;
+
+  /* Touch actions */
+  touch-action: none;
+  user-select: none;
+  background: #000;
+
+  border-radius: var(--media-border-radius, 0.5rem);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+
+  /* 
+    Calculate translate based on parent dimensions 
+    (100% / pip-scale - 100%) gives the remaining space multiplier.
+    1rem margin from edges.
+  */
+  translate: calc(var(--pip-x) * (100% / var(--pip-scale) - 100%)) calc(var(--pip-y) * (100% / var(--pip-scale) - 100%));
+
+  /* Animations */
+  transition:
+    translate 0.1s ease-out,
+    scale 0.1s ease-out;
+  will-change: translate, scale;
+}
+
+media-pip-overlay[data-active] {
+  display: flex;
+}
+
+media-pip-overlay[data-dragging],
+media-pip-overlay[data-resizing] {
+  z-index: 51;
+  transition: none;
+}
+
+media-pip-overlay video {
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* Let overlay handle pointers */
+  object-fit: contain; /* Let overlay handle pointers */
+}
+
+/* Close Button */
+.pip-overlay__close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  color: white;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  border-radius: 50%;
+  opacity: 0;
+  backdrop-filter: blur(4px);
+  transition:
+    opacity 0.2s,
+    background 0.2s;
+}
+
+media-pip-overlay:hover .pip-overlay__close,
+media-pip-overlay:focus-within .pip-overlay__close {
+  opacity: 1;
+}
+
+.pip-overlay__close:hover {
+  background: rgba(0, 0, 0, 0.9);
+}
+
+/* Resize Handle (Bottom Right) */
+.pip-overlay__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 2rem;
+  height: 2rem;
+  cursor: nwse-resize;
+  /* Visual indicator (optional) */
+  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.3) 50%);
+  opacity: 0;
+}
+
+media-pip-overlay:hover .pip-overlay__resize {
+  opacity: 1;
+}
+
+/* Autoplay Fallback UI */
+.pip-overlay__gesture-prompt {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  font-weight: bold;
+  color: white;
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.7);
+  border: none;
+  backdrop-filter: blur(4px);
+}
+
+/* Toggle Button Icons */
+media-pip-overlay-toggle [data-pip-overlay-active] svg.pip-overlay-icon-on {
+  display: block;
+}
+media-pip-overlay-toggle [data-pip-overlay-active] svg.pip-overlay-icon-off {
+  display: none;
+}
+media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-on {
+  display: none;
+}
+media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-off {
+  display: block;
+}

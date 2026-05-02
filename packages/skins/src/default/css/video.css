@@ -15,6 +15,7 @@
 @import "./components/slider.css";
 @import "./components/popup.css";
 @import "./components/captions.css";
+@import "./components/pip-overlay.css";
 @import "../../shared/css/video/icon-state.css";
 
 /* ==========================================================================

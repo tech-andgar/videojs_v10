@@ -383,6 +383,7 @@ export interface MediaPipOverlayState {
   setPipOverlayScale(scale: number): void;
   setPipOverlaySources(sources: PipOverlaySource[]): void;
   setPipOverlayLang(lang: string): void;
+  setPipOverlayError(error: string): void;
   dismissPipOverlayError(): void;
   resolvePipOverlayGesture(): void;
 }
