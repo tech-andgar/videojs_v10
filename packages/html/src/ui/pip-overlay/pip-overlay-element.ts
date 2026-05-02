@@ -76,7 +76,7 @@ export class PipOverlayElement extends MediaElement {
 
     this.setAttribute('role', 'region');
     this.setAttribute('aria-label', 'Secondary video overlay');
-    this.setAttribute('tabindex', '0');
+    this.setAttribute('tabindex', '-1');
   }
 
   override connectedCallback(): void {
