@@ -9,6 +9,10 @@ import { PlayerController } from '../../player/player-controller';
 import { MediaElement } from '../media-element';
 import type { PipSourceElement } from './pip-source-element';
 
+const log = (...args: unknown[]) => {
+  if (__DEV__) console.debug('[pip-overlay]', ...args);
+};
+
 export class PipOverlayElement extends MediaElement {
   static readonly tagName = 'media-pip-overlay';
 
@@ -90,6 +94,7 @@ export class PipOverlayElement extends MediaElement {
     super.connectedCallback();
     if (this.destroyed) return;
 
+    log('connected');
     this.#disconnect = new AbortController();
 
     this.#closeBtn.addEventListener('click', this.#onCloseClick);
@@ -113,6 +118,7 @@ export class PipOverlayElement extends MediaElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    log('disconnected');
     this.#disconnect?.abort();
     this.#disconnect = null;
 
@@ -162,11 +168,14 @@ export class PipOverlayElement extends MediaElement {
     if (!state) return;
 
     if (state.pipOverlayActive) {
+      log('show → src=%s pos=(%s,%s) scale=%s', state.pipOverlaySrc, state.pipOverlayPosition.x, state.pipOverlayPosition.y, state.pipOverlayScale);
       this.dataset.active = '';
     } else {
+      log('hide');
       delete this.dataset.active;
       // Cancel drag if overlay was hidden while dragging
       if (this.#dragPointerId !== null) {
+        log('drag cancelled — overlay hidden during drag');
         this.releasePointerCapture(this.#dragPointerId);
         this.#dragPointerId = null;
         delete this.dataset.dragging;
@@ -195,6 +204,7 @@ export class PipOverlayElement extends MediaElement {
     if (state.pipOverlaySrc && this.#video.getAttribute('src') !== state.pipOverlaySrc) {
       this.#loadGeneration++;
       const gen = this.#loadGeneration;
+      log('src change gen=%d → %s', gen, state.pipOverlaySrc);
       // Release old buffers before loading new source
       this.#video.removeAttribute('src');
       this.#video.load();
@@ -203,6 +213,7 @@ export class PipOverlayElement extends MediaElement {
       // Store generation for stale-check in handlers
       this.#video.dataset.gen = String(gen);
     } else if (!state.pipOverlaySrc && this.#video.hasAttribute('src')) {
+      log('src cleared — releasing buffers');
       // Overlay hidden - release buffers
       this.#video.removeAttribute('src');
       this.#video.load();
@@ -240,12 +251,14 @@ export class PipOverlayElement extends MediaElement {
 
   readonly #onCloseClick = (e: MouseEvent) => {
     e.stopPropagation();
+    log('close button clicked');
     this.pipOverlay.value?.hidePipOverlay();
     this.#toggleButton?.focus();
   };
 
   readonly #onGestureClick = (e: MouseEvent) => {
     e.stopPropagation();
+    log('gesture prompt clicked — resolving autoplay block');
     const state = this.pipOverlay.value;
     if (state) {
       state.resolvePipOverlayGesture();
@@ -262,8 +275,10 @@ export class PipOverlayElement extends MediaElement {
     this.setPointerCapture(e.pointerId);
     this.#dragPointerId = e.pointerId;
     if (isResize) {
+      log('resize start');
       this.dataset.resizing = '';
     } else {
+      log('drag start pos=(%s,%s)', state.pipOverlayPosition.x, state.pipOverlayPosition.y);
       this.dataset.dragging = '';
     }
 
@@ -310,6 +325,7 @@ export class PipOverlayElement extends MediaElement {
         cancelAnimationFrame(rafId);
         rafId = null;
       }
+      log(isResize ? 'resize end scale=%s' : 'drag end pos=(%s,%s)', isResize ? state.pipOverlayScale : state.pipOverlayPosition.x, isResize ? '' : state.pipOverlayPosition.y);
       this.releasePointerCapture(upEvt.pointerId);
       this.#dragPointerId = null;
       delete this.dataset.dragging;
@@ -367,9 +383,13 @@ export class PipOverlayElement extends MediaElement {
 
   readonly #onLoadedMetadata = () => {
     const currentGen = this.#video.dataset.gen;
-    if (currentGen !== String(this.#loadGeneration)) return; // stale load
+    if (currentGen !== String(this.#loadGeneration)) {
+      log('loadedmetadata ignored — stale gen=%s current=%d', currentGen, this.#loadGeneration);
+      return;
+    }
     if (this.#video.videoWidth && this.#video.videoHeight) {
       const ratio = this.#video.videoWidth / this.#video.videoHeight;
+      log('loadedmetadata %dx%d → aspect=%s', this.#video.videoWidth, this.#video.videoHeight, ratio.toFixed(3));
       this.style.setProperty('--pip-aspect', ratio.toString());
     }
   };
@@ -378,7 +398,11 @@ export class PipOverlayElement extends MediaElement {
     const state = this.pipOverlay.value;
     if (!state) return;
 
-    if (__DEV__ && this.#video.error?.code === MediaError.MEDIA_ERR_DECODE) {
+    const code = this.#video.error?.code;
+    const message = this.#video.error?.message ?? 'unknown';
+    log('video error code=%s message=%s src=%s', code, message, this.#video.src);
+
+    if (__DEV__ && code === MediaError.MEDIA_ERR_DECODE) {
       console.warn('[pip-overlay] MEDIA_ERR_DECODE on PIP video. On iOS Safari this may indicate the hardware video decoder limit has been reached. Consider reducing concurrent video elements.');
     }
 
@@ -388,11 +412,13 @@ export class PipOverlayElement extends MediaElement {
   };
 
   readonly #onWaiting = () => {
+    log('pip buffering — starting 500ms pause debounce');
     if (this.#bufferingTimer) return;
     this.#bufferingTimer = setTimeout(() => {
       this.#bufferingTimer = null;
       const store = this.player.value;
       if (store && this.pipOverlay.value?.pipOverlayActive) {
+        log('pip still buffering after 500ms — pausing main');
         (store.state as unknown as { pause(): void }).pause();
         this.#pausedByBuffering = true;
       }
@@ -401,11 +427,13 @@ export class PipOverlayElement extends MediaElement {
 
   readonly #onPlaying = () => {
     if (this.#bufferingTimer) {
+      log('pip recovered within 500ms — cancelled main pause');
       clearTimeout(this.#bufferingTimer);
       this.#bufferingTimer = null;
       return;
     }
     if (this.#pausedByBuffering) {
+      log('pip resumed — resuming main');
       this.#pausedByBuffering = false;
       const store = this.player.value;
       if (store) {
