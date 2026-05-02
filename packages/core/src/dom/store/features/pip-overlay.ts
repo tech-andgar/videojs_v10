@@ -128,7 +128,7 @@ export const pipOverlayFeature = definePlayerFeature({
     const getPipMedia = (): HTMLVideoElement | null =>
       (container as unknown as PipOverlayMediaHost)[PIP_OVERLAY_MEDIA_SYMBOL] ?? null;
 
-    const isLive = () => !isFinite(media.duration);
+    const isLive = () => media.duration === Infinity;
 
     // --- Soft Sync Logic ---
     const syncTime = () => {
