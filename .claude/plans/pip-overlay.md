@@ -86,6 +86,16 @@ Not included in `videoFeatures` by default — opt-in only.
 | Initial position | Bottom-right (configurable) | `{ x: 0.78, y: 0.72 }` default |
 | CORS | Inherit from main | Fallback to own `crossorigin` attribute |
 | ResizeObserver | Yes | Container size dictates mobile scale and dynamic position clamping. |
+| URL sanitization | Allowlist | Only `http:`, `https:`, `blob:` URIs accepted for `pip-src` / `<pip-source src>`. Reject `javascript:`, `data:`, others. Validate in `showPipOverlay()` and `setPipOverlaySources()`. |
+| CORS error messaging | Opaque-aware | Browser won't reveal CORS failure reason. Show generic "Failed to load secondary video" + suggest checking CORS headers in dev console (`__DEV__` warning). |
+| Memory cleanup | Explicit release | On source change or hide: `video.removeAttribute('src')` + `video.load()` to release buffers. Prevents mobile memory pressure. |
+| Load abort | Cancel pending | Rapid toggle/source change aborts pending loads via src clear before setting new src. Prevents stacked load requests. |
+| iOS video limit | Detect + warn | `__DEV__` warning if second `<video>` fails to decode. No runtime workaround — hardware limit. Document in API docs. |
+| Live streams | Skip sync | If main video is live (`duration === Infinity`), disable drift-based sync. PIP plays independently from same live edge. Document: live PIP sync is best-effort. |
+| DRM content | Not supported | PIP overlay does not support EME/DRM sources. `__DEV__` warning if main video uses `mediaKeys`. Document limitation. |
+| Drag cancellation | Auto-cancel | If `pipOverlayActive` becomes `false` during drag, release pointer capture and reset drag state. Prevents orphaned pointer events. |
+| Aspect ratio fallback | Graceful | Default `--pip-aspect: 16/9` until `loadedmetadata`. If video errors before metadata, keep default. No layout jump. |
+| Orientation change | Re-clamp | ResizeObserver handles this. Add `requestAnimationFrame` after resize to ensure position clamps after rotation animation completes. |
 
 ## Source Resolution Priority
 
@@ -203,6 +213,17 @@ function getPipMedia(container: Element): HTMLVideoElement | null {
   return (container as PipOverlayMediaHost)[PIP_OVERLAY_MEDIA_SYMBOL] ?? null;
 }
 
+const ALLOWED_PROTOCOLS = new Set(['http:', 'https:', 'blob:']);
+
+function isAllowedSrc(src: string): boolean {
+  try {
+    const url = new URL(src, location.href);
+    return ALLOWED_PROTOCOLS.has(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
 export const pipOverlayFeature = definePlayerFeature({
   name: 'pip-overlay',
 
@@ -222,7 +243,13 @@ export const pipOverlayFeature = definePlayerFeature({
     showPipOverlay(src?) {
       const state = get();
       const resolved = src ?? state.pipOverlaySrc ?? state.pipOverlaySources[0]?.src ?? null;
-      if (resolved) set({ pipOverlayActive: true, pipOverlaySrc: resolved, pipOverlayError: null });
+      if (!resolved) return;
+      if (!isAllowedSrc(resolved)) {
+        if (__DEV__) console.warn(`[pip-overlay] Blocked unsafe src: ${resolved}`);
+        set({ pipOverlayError: 'Invalid source URL' });
+        return;
+      }
+      set({ pipOverlayActive: true, pipOverlaySrc: resolved, pipOverlayError: null });
     },
 
     hidePipOverlay() { set({ pipOverlayActive: false }); },
@@ -243,8 +270,12 @@ export const pipOverlayFeature = definePlayerFeature({
     },
 
     setPipOverlaySources(sources) {
-      set({ pipOverlaySources: sources });
-      if (!get().pipOverlaySrc && sources.length > 0) set({ pipOverlaySrc: sources[0].src });
+      const safe = sources.filter(s => isAllowedSrc(s.src));
+      if (__DEV__ && safe.length < sources.length) {
+        console.warn('[pip-overlay] Filtered unsafe source URLs');
+      }
+      set({ pipOverlaySources: safe });
+      if (!get().pipOverlaySrc && safe.length > 0) set({ pipOverlaySrc: safe[0].src });
     },
 
     setPipOverlayLang(lang) {
@@ -274,10 +305,13 @@ export const pipOverlayFeature = definePlayerFeature({
       }
     }
 
-    // --- Soft Sync Logic ---
+    // --- Live stream detection: skip drift sync ---
+    const isLive = () => !isFinite(media.duration);
+
+    // --- Soft Sync Logic (VOD only) ---
     const syncTime = () => {
       const pipEl = pip();
-      if (!pipEl || !get().pipOverlayActive) return;
+      if (!pipEl || !get().pipOverlayActive || isLive()) return;
       const drift = pipEl.currentTime - media.currentTime;
       const absDrift = Math.abs(drift);
       
@@ -339,14 +373,28 @@ export const pipOverlayFeature = definePlayerFeature({
     // if webkitPresentationMode === 'fullscreen' while pipOverlayActive,
     // exits and re-requests on container instead.
 
-    // --- ResizeObserver (Clamp + Mobile Scale) ---
+    // --- Memory Cleanup on source change / hide ---
+    let prevSrc: string | null = null;
+    const cleanupVideo = (pipEl: HTMLVideoElement) => {
+      pipEl.removeAttribute('src');
+      pipEl.load(); // Release buffers
+    };
+
+    // --- DRM detection (__DEV__ only) ---
+    if (__DEV__ && 'mediaKeys' in media && media.mediaKeys) {
+      console.warn('[pip-overlay] Main video uses EME/DRM. PIP overlay does not support DRM sources.');
+    }
+
+    // --- ResizeObserver (Clamp + Mobile Scale + Orientation) ---
     const resizeObserver = new ResizeObserver((entries) => {
       const { width } = entries[0].contentRect;
       if (width < 640 && get().pipOverlayScale < 0.4) set({ pipOverlayScale: 0.4 });
       
-      // Trigger a position re-clamp by re-applying the current position
-      const { x, y } = get().pipOverlayPosition;
-      get().setPipOverlayPosition(x, y); 
+      // Re-clamp after rotation animation completes
+      requestAnimationFrame(() => {
+        const { x, y } = get().pipOverlayPosition;
+        get().setPipOverlayPosition(x, y);
+      });
     });
     resizeObserver.observe(container);
     signal.addEventListener('abort', () => resizeObserver.disconnect());
@@ -355,11 +403,15 @@ export const pipOverlayFeature = definePlayerFeature({
     listen(media, 'timeupdate', syncTime, { signal });
     listen(media, 'seeked', () => { 
       const pipEl = pip();
-      if (pipEl) pipEl.currentTime = media.currentTime; 
+      if (pipEl && !isLive()) pipEl.currentTime = media.currentTime; 
     }, { signal });
     listen(media, 'play', syncPlayState, { signal });
     listen(media, 'pause', syncPlayState, { signal });
     listen(media, 'playing', syncPlayState, { signal });
+
+    // --- Watch for source changes: cleanup old video, abort pending loads ---
+    // Implemented in UI element: on src attribute change, call cleanupVideo()
+    // before setting new src. Prevents stacked loads and memory leaks.
   },
 });
 ```
@@ -408,6 +460,9 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 15. **Fullscreen Guard**: On iOS Safari, intercept fullscreen to force container fullscreen path. If `webkitPresentationMode` changes to `'fullscreen'` while PIP active, exit and re-request on container. If container fullscreen unavailable, show warning via `pipOverlayError`.
 16. **Aria-Live**: Render an internal visually hidden `aria-live="polite"` element. Specific strings: `"Secondary video opened"`, `"Secondary video closed"`, `"Secondary video error: {message}"`, `"Secondary video resumed"`.
 17. **Min size**: `min-width: 160px` — prevents unreadable overlay on very small containers.
+18. **Drag cancellation**: Watch `pipOverlayActive` — if becomes `false` during drag, release pointer capture via `releasePointerCapture()`, reset drag state, remove `data-dragging`.
+19. **Memory cleanup**: On `pip-src` change or hide, call `video.removeAttribute('src')` + `video.load()` to release buffers before setting new source. Prevents mobile memory pressure and stacked loads.
+20. **iOS video limit**: If internal `<video>` fires `error` with `MEDIA_ERR_DECODE`, show `__DEV__` warning about iOS hardware video decoder limits.
 
 **Accessibility:**
 
@@ -929,6 +984,24 @@ Tests to write:
 - **Mobile & ResizeObserver:**
   - Container resize width < 640 → scale adjusts to 0.4.
   - Position re-clamps on container resize.
+  - Position re-clamps after orientation change (rAF delay).
+
+- **URL sanitization:**
+  - `showPipOverlay('javascript:alert(1)')` → blocked, sets error.
+  - `showPipOverlay('https://example.com/v.mp4')` → allowed.
+  - `showPipOverlay('data:text/html,...')` → blocked.
+  - `setPipOverlaySources()` filters out unsafe URLs.
+
+- **Live streams:**
+  - `duration === Infinity` → `syncTime` skipped (no drift calc).
+  - `seeked` with live → no PIP currentTime sync.
+
+- **Memory cleanup:**
+  - Source change → old video src cleared + `load()` called.
+  - `hidePipOverlay()` → video src released.
+
+- **Drag cancellation:**
+  - `pipOverlayActive` set to `false` during drag → pointer capture released, drag state reset.
 
 ---
 
@@ -964,6 +1037,11 @@ pnpm build:packages
 17. **iOS Safari**: Enter fullscreen with PIP active → must use container fullscreen, PIP overlay persists. No native video fullscreen takeover.
 18. **RTL**: Set `dir="rtl"` on container → PIP defaults to bottom-left. Arrow keys movement flipped.
 19. **Touch**: On mobile device, close button always visible (no hover required).
+20. **Live stream**: Load live/DVR source → PIP plays independently, no drift sync attempts.
+21. **Memory**: Toggle PIP on/off rapidly 10x → check DevTools memory tab for no video buffer leaks.
+22. **Drag cancel**: While dragging overlay, call `hidePipOverlay()` programmatically → overlay closes cleanly, no stuck pointer capture.
+23. **URL safety**: Set `pip-src="javascript:alert(1)"` → blocked, error shown. `pip-src="https://..."` → works.
+24. **Orientation**: Rotate mobile device while PIP visible → overlay re-clamps within bounds after rotation.
 
 ### Manual — React
 
