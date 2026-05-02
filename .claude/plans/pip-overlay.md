@@ -96,6 +96,11 @@ Not included in `videoFeatures` by default — opt-in only.
 | Drag cancellation | Auto-cancel | If `pipOverlayActive` becomes `false` during drag, release pointer capture and reset drag state. Prevents orphaned pointer events. |
 | Aspect ratio fallback | Graceful | Default `--pip-aspect: 16/9` until `loadedmetadata`. If video errors before metadata, keep default. No layout jump. |
 | Orientation change | Re-clamp | ResizeObserver handles this. Add `requestAnimationFrame` after resize to ensure position clamps after rotation animation completes. |
+| Reduced motion | Respect | `@media (prefers-reduced-motion: reduce)`: disable all transitions/animations (open/close/drag). WCAG 2.3.3. |
+| Page visibility | Hard re-sync | On `visibilitychange` → `visible`, force hard `currentTime` sync. Browsers throttle/pause `<video>` in hidden tabs → silent drift. |
+| Source load race | Generation counter | Increment counter on each source change. Ignore load completions from stale generations. Prevents fast toggle showing wrong source. |
+| Drag perf | rAF batching | Batch `pointermove` → `setPipOverlayPosition()` via `requestAnimationFrame`. Prevents layout thrashing on 120Hz+ displays. |
+| Forced colors | System colors | `@media (forced-colors: active)`: close button and resize handles use system colors (`ButtonText`, `Canvas`). Prevents invisible controls in Windows High Contrast. |
 
 ## Source Resolution Priority
 
@@ -399,6 +404,15 @@ export const pipOverlayFeature = definePlayerFeature({
     resizeObserver.observe(container);
     signal.addEventListener('abort', () => resizeObserver.disconnect());
 
+    // --- Page Visibility: hard re-sync on tab return ---
+    listen(document, 'visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      const pipEl = pip();
+      if (!pipEl || !get().pipOverlayActive || isLive()) return;
+      pipEl.currentTime = media.currentTime;
+      pipEl.playbackRate = media.playbackRate;
+    }, { signal });
+
     // --- Listeners ---
     listen(media, 'timeupdate', syncTime, { signal });
     listen(media, 'seeked', () => { 
@@ -411,7 +425,7 @@ export const pipOverlayFeature = definePlayerFeature({
 
     // --- Watch for source changes: cleanup old video, abort pending loads ---
     // Implemented in UI element: on src attribute change, call cleanupVideo()
-    // before setting new src. Prevents stacked loads and memory leaks.
+    // before setting new src. Uses generation counter to ignore stale loads.
   },
 });
 ```
@@ -463,6 +477,8 @@ export { pipOverlayFeature, PIP_OVERLAY_MEDIA_SYMBOL } from './pip-overlay';
 18. **Drag cancellation**: Watch `pipOverlayActive` — if becomes `false` during drag, release pointer capture via `releasePointerCapture()`, reset drag state, remove `data-dragging`.
 19. **Memory cleanup**: On `pip-src` change or hide, call `video.removeAttribute('src')` + `video.load()` to release buffers before setting new source. Prevents mobile memory pressure and stacked loads.
 20. **iOS video limit**: If internal `<video>` fires `error` with `MEDIA_ERR_DECODE`, show `__DEV__` warning about iOS hardware video decoder limits.
+21. **Drag rAF batching**: `pointermove` handler stores latest position, applies via single `requestAnimationFrame`. Prevents layout thrashing on 120Hz+ displays.
+22. **Source generation counter**: Increment `#loadGeneration` on each source change. In `loadedmetadata`/`canplay` handlers, ignore if generation doesn't match. Prevents stale source display on rapid toggle.
 
 **Accessibility:**
 
@@ -598,6 +614,33 @@ media-pip-overlay .pip-overlay__gesture-prompt {
   display: flex; align-items: center; justify-content: center;
   color: white; font-weight: bold; cursor: pointer;
   z-index: 5;
+}
+
+/* Reduced motion: disable all transitions/animations (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  media-pip-overlay,
+  media-pip-overlay .pip-overlay__close,
+  media-pip-overlay .pip-overlay__resize {
+    transition: none;
+  }
+  media-pip-overlay[data-active] {
+    transform: translate(-50%, -50%); /* No scale animation */
+  }
+}
+
+/* Windows High Contrast / forced-colors */
+@media (forced-colors: active) {
+  media-pip-overlay .pip-overlay__close {
+    background: Canvas;
+    color: ButtonText;
+    border: 1px solid ButtonText;
+  }
+  media-pip-overlay .pip-overlay__resize {
+    background: ButtonText;
+  }
+  media-pip-overlay {
+    border: 2px solid ButtonText;
+  }
 }
 
 /* Mobile */
@@ -1003,6 +1046,18 @@ Tests to write:
 - **Drag cancellation:**
   - `pipOverlayActive` set to `false` during drag → pointer capture released, drag state reset.
 
+- **Page visibility re-sync:**
+  - Hide tab → wait 10s → return → PIP `currentTime` hard syncs to main.
+  - Hide tab → return → PIP `playbackRate` matches main.
+  - Live stream: no re-sync on tab return.
+
+- **Source load race:**
+  - `showPipOverlay('a.mp4')` then immediately `showPipOverlay('b.mp4')` → only `b.mp4` displays.
+  - Stale `loadedmetadata` from `a.mp4` ignored via generation counter.
+
+- **Drag perf:**
+  - Multiple `pointermove` events within single frame → only one `setPipOverlayPosition()` call (rAF batched).
+
 ---
 
 ## Phase 18: Verification
@@ -1042,6 +1097,11 @@ pnpm build:packages
 22. **Drag cancel**: While dragging overlay, call `hidePipOverlay()` programmatically → overlay closes cleanly, no stuck pointer capture.
 23. **URL safety**: Set `pip-src="javascript:alert(1)"` → blocked, error shown. `pip-src="https://..."` → works.
 24. **Orientation**: Rotate mobile device while PIP visible → overlay re-clamps within bounds after rotation.
+25. **Reduced motion**: Set `prefers-reduced-motion: reduce` in OS/browser → open/close PIP has no animation, drag has no transition.
+26. **High contrast**: Enable Windows High Contrast → close button and resize handles visible with system colors. Overlay has visible border.
+27. **Tab visibility**: Play main + PIP → switch tab for 10s → return → PIP re-syncs immediately to main currentTime.
+28. **Rapid source switch**: Toggle between sources rapidly → only final source displays, no flash of intermediate sources.
+29. **Drag smoothness**: On 120Hz display (iPad Pro), drag overlay → smooth movement, no jank or double-updates per frame.
 
 ### Manual — React
 
