@@ -17,6 +17,10 @@ function isAllowedSrc(src: string): boolean {
   }
 }
 
+interface PipOverlayMediaHost {
+  [PIP_OVERLAY_MEDIA_SYMBOL]?: HTMLVideoElement;
+}
+
 export const pipOverlayFeature = definePlayerFeature({
   name: 'pip-overlay',
 
@@ -109,6 +113,10 @@ export const pipOverlayFeature = definePlayerFeature({
       return;
     }
 
+    if (__DEV__ && 'mediaKeys' in media && (media as HTMLVideoElement).mediaKeys) {
+      console.warn('[pip-overlay] Main video uses EME/DRM. PIP overlay does not support DRM sources.');
+    }
+
     // Flip default position for RTL
     if (isRTL(container)) {
       const { pipOverlayPosition } = get() as unknown as MediaPipOverlayState;
@@ -118,7 +126,7 @@ export const pipOverlayFeature = definePlayerFeature({
     }
 
     const getPipMedia = (): HTMLVideoElement | null =>
-      (container as unknown as Record<symbol, unknown>)[PIP_OVERLAY_MEDIA_SYMBOL] as HTMLVideoElement | null;
+      (container as unknown as PipOverlayMediaHost)[PIP_OVERLAY_MEDIA_SYMBOL] ?? null;
 
     const isLive = () => !isFinite(media.duration);
 
@@ -184,8 +192,11 @@ export const pipOverlayFeature = definePlayerFeature({
         }
 
         // Trigger a position re-clamp by re-applying the current position
-        const { x, y } = state.pipOverlayPosition;
-        state.setPipOverlayPosition(x, y);
+        requestAnimationFrame(() => {
+          const currentState = get() as unknown as MediaPipOverlayState;
+          const { x, y } = currentState.pipOverlayPosition;
+          currentState.setPipOverlayPosition(x, y);
+        });
       });
 
       resizeObserver.observe(container);
@@ -210,5 +221,14 @@ export const pipOverlayFeature = definePlayerFeature({
     listen(media, 'pause', syncPlayState, { signal });
     listen(media, 'playing', syncPlayState, { signal });
     listen(media, 'ratechange', syncRate, { signal });
+
+    listen(document, 'visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      const pip = getPipMedia();
+      const state = get() as unknown as MediaPipOverlayState;
+      if (!pip || !state.pipOverlayActive || isLive()) return;
+      pip.currentTime = media.currentTime;
+      pip.playbackRate = media.playbackRate;
+    }, { signal });
   },
 });
