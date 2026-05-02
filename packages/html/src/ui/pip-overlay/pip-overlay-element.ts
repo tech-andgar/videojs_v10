@@ -38,6 +38,8 @@ export class PipOverlayElement extends MediaElement {
 
   #disconnect: AbortController | null = null;
   #mutationObserver: MutationObserver | null = null;
+  #bufferingTimer: ReturnType<typeof setTimeout> | null = null;
+  #pausedByBuffering = false;
 
   constructor() {
     super();
@@ -109,6 +111,11 @@ export class PipOverlayElement extends MediaElement {
 
     this.#mutationObserver?.disconnect();
     this.#mutationObserver = null;
+
+    if (this.#bufferingTimer) {
+      clearTimeout(this.#bufferingTimer);
+      this.#bufferingTimer = null;
+    }
 
     this.#closeBtn.removeEventListener('click', this.#onCloseClick);
     this.#gestureBtn.removeEventListener('click', this.#onGestureClick);
@@ -336,16 +343,29 @@ export class PipOverlayElement extends MediaElement {
   };
 
   readonly #onWaiting = () => {
-    const store = this.player.value;
-    if (store) {
-      (store.state as unknown as { pause(): void }).pause();
-    }
+    if (this.#bufferingTimer) return;
+    this.#bufferingTimer = setTimeout(() => {
+      this.#bufferingTimer = null;
+      const store = this.player.value;
+      if (store && this.pipOverlay.value?.pipOverlayActive) {
+        (store.state as unknown as { pause(): void }).pause();
+        this.#pausedByBuffering = true;
+      }
+    }, 500);
   };
 
   readonly #onPlaying = () => {
-    const store = this.player.value;
-    if (store) {
-      (store.state as unknown as { play(): Promise<void> }).play().catch(() => {});
+    if (this.#bufferingTimer) {
+      clearTimeout(this.#bufferingTimer);
+      this.#bufferingTimer = null;
+      return;
+    }
+    if (this.#pausedByBuffering) {
+      this.#pausedByBuffering = false;
+      const store = this.player.value;
+      if (store) {
+        (store.state as unknown as { play(): Promise<void> }).play().catch(() => {});
+      }
     }
   };
 }
