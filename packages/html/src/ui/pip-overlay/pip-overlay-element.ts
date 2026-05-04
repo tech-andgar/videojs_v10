@@ -254,10 +254,10 @@ export class PipOverlayElement extends MediaElement {
   };
 
   readonly #onPointerDown = (e: PointerEvent) => {
-    if (e.target === this.#closeBtn || e.target === this.#gestureBtn) return;
+    const path = e.composedPath();
+    if (path.includes(this.#closeBtn) || path.includes(this.#gestureBtn)) return;
 
-    const target = e.target as HTMLElement;
-    const isResize = target.classList.contains('pip-overlay__resize');
+    const isResize = path.some((el) => el instanceof HTMLElement && el.classList.contains('pip-overlay__resize'));
 
     this.setPointerCapture(e.pointerId);
     if (isResize) {

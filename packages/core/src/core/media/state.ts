@@ -356,8 +356,8 @@ export interface MediaPictureInPictureState {
 
 export interface PipOverlaySource {
   src: string;
-  lang?: string;
-  label?: string;
+  lang?: string | undefined;
+  label?: string | undefined;
 }
 
 export type PipOverlayLoadingState = 'spinner' | 'black' | 'poster';

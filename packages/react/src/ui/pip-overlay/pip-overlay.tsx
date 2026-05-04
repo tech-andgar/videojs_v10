@@ -91,7 +91,7 @@ export function PipOverlay({
   // Drag & Resize Handlers
   const handlePointerDown = (e: React.PointerEvent) => {
     const target = e.target as HTMLElement;
-    const isResizeHandle = target.classList.contains('pip-overlay__resize');
+    const isResizeHandle = !!target.closest('.pip-overlay__resize');
     const overlay = overlayRef.current;
     const state = pip;
 
