@@ -1,3 +1,21 @@
 @import "../base.css";
 @import "../shared.css";
 @import "@videojs/skins/default/css/video.css";
+@import "../../ui/pip-overlay/pip-overlay.css";
+
+.media-button--pip-source .media-icon {
+  width: 20px;
+  height: 20px;
+}
+
+.media-button--pip-overlay .media-icon--pip-overlay-exit {
+  display: none;
+}
+
+.media-button--pip-overlay[data-active] .media-icon--pip-overlay-enter {
+  display: none;
+}
+
+.media-button--pip-overlay[data-active] .media-icon--pip-overlay-exit {
+  display: block;
+}

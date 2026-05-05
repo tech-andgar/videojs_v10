@@ -40,6 +40,7 @@ export const pipOverlayFeature = definePlayerFeature({
     showPipOverlay(src?) {
       const state = get() as unknown as MediaPipOverlayState;
       const resolved = src ?? state.pipOverlaySrc ?? state.pipOverlaySources[0]?.src ?? null;
+      if (__DEV__) console.log('[pip-overlay] showPipOverlay', { src, resolved });
       if (resolved) {
         if (!isAllowedSrc(resolved)) {
           if (__DEV__) console.warn(`[pip-overlay] Blocked unsafe src: ${resolved}`);
@@ -51,11 +52,13 @@ export const pipOverlayFeature = definePlayerFeature({
     },
 
     hidePipOverlay() {
+      if (__DEV__) console.log('[pip-overlay] hidePipOverlay');
       set({ pipOverlayActive: false });
     },
 
     togglePipOverlay(src?) {
       const state = get() as unknown as MediaPipOverlayState;
+      if (__DEV__) console.log('[pip-overlay] togglePipOverlay', { active: state.pipOverlayActive });
       if (state.pipOverlayActive) {
         set({ pipOverlayActive: false });
       } else {
@@ -66,11 +69,16 @@ export const pipOverlayFeature = definePlayerFeature({
     setPipOverlayPosition(x, y) {
       const state = get() as unknown as MediaPipOverlayState;
       const clamp = (v: number) => (state.pipOverlayConstrained ? Math.max(0, Math.min(1, v)) : v);
-      set({ pipOverlayPosition: { x: clamp(x), y: clamp(y) } });
+      const newX = clamp(x);
+      const newY = clamp(y);
+      if (__DEV__) console.log('[pip-overlay] setPosition', { x: newX, y: newY });
+      set({ pipOverlayPosition: { x: newX, y: newY } });
     },
 
     setPipOverlayScale(scale) {
-      set({ pipOverlayScale: Math.max(0.15, Math.min(0.5, scale)) });
+      const newScale = Math.max(0.15, Math.min(0.5, scale));
+      if (__DEV__) console.log('[pip-overlay] setScale', { scale: newScale });
+      set({ pipOverlayScale: newScale });
     },
 
     setPipOverlaySources(sources) {
@@ -78,9 +86,11 @@ export const pipOverlayFeature = definePlayerFeature({
       if (__DEV__ && safe.length < sources.length) {
         console.warn('[pip-overlay] Filtered unsafe source URLs');
       }
+      if (__DEV__) console.log('[pip-overlay] setSources', safe);
       set({ pipOverlaySources: safe });
       const state = get() as unknown as MediaPipOverlayState;
       if (!state.pipOverlaySrc && safe.length > 0 && safe[0]) {
+        if (__DEV__) console.log('[pip-overlay] Auto-selecting first source:', safe[0].src);
         set({ pipOverlaySrc: safe[0].src });
       }
     },
@@ -91,6 +101,28 @@ export const pipOverlayFeature = definePlayerFeature({
       if (source) {
         set({ pipOverlayLang: lang, pipOverlaySrc: source.src });
       }
+    },
+
+    setPipOverlaySrc(src) {
+      const state = get() as unknown as MediaPipOverlayState;
+      const source = state.pipOverlaySources.find((s) => s.src === src);
+      if (source) {
+        set({ pipOverlaySrc: src, pipOverlayLang: source.lang || null });
+      } else {
+        set({ pipOverlaySrc: src, pipOverlayLang: null });
+      }
+    },
+
+    addPipOverlaySource(source) {
+      const state = get() as unknown as MediaPipOverlayState;
+      if (!state.pipOverlaySources.some((s) => s.src === source.src)) {
+        state.setPipOverlaySources([...state.pipOverlaySources, source]);
+      }
+    },
+
+    removePipOverlaySource(src) {
+      const state = get() as unknown as MediaPipOverlayState;
+      state.setPipOverlaySources(state.pipOverlaySources.filter((s) => s.src !== src));
     },
 
     setPipOverlayError(error) {
@@ -141,11 +173,13 @@ export const pipOverlayFeature = definePlayerFeature({
       const absDrift = Math.abs(drift);
 
       if (absDrift > 2) {
+        if (__DEV__) console.log('[pip-overlay] Hard sync (drift > 2s):', drift);
         pip.currentTime = media.currentTime; // Hard sync for large drift
       } else if (absDrift > 0.3) {
         // Soft sync via rate
         const baseRate = media.playbackRate;
         pip.playbackRate = drift > 0 ? baseRate * 0.9 : baseRate * 1.1;
+        if (__DEV__) console.log('[pip-overlay] Soft sync (playbackRate adj):', pip.playbackRate);
       } else if (pip.playbackRate !== media.playbackRate) {
         pip.playbackRate = media.playbackRate; // Restore normal rate
       }
@@ -157,10 +191,13 @@ export const pipOverlayFeature = definePlayerFeature({
       if (!pip || !state.pipOverlayActive) return;
 
       if (media.paused && !pip.paused) {
+        if (__DEV__) console.log('[pip-overlay] Sync: Pausing secondary');
         pip.pause();
       } else if (!media.paused && pip.paused) {
+        if (__DEV__) console.log('[pip-overlay] Sync: Playing secondary');
         pip.play().catch((err: unknown) => {
           if (err instanceof DOMException && err.name === 'NotAllowedError') {
+            console.warn('[pip-overlay] Autoplay blocked, requires gesture');
             set({ pipOverlayRequiresGesture: true });
           }
         });
@@ -222,13 +259,18 @@ export const pipOverlayFeature = definePlayerFeature({
     listen(media, 'playing', syncPlayState, { signal });
     listen(media, 'ratechange', syncRate, { signal });
 
-    listen(document, 'visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-      const pip = getPipMedia();
-      const state = get() as unknown as MediaPipOverlayState;
-      if (!pip || !state.pipOverlayActive || isLive()) return;
-      pip.currentTime = media.currentTime;
-      pip.playbackRate = media.playbackRate;
-    }, { signal });
+    listen(
+      document,
+      'visibilitychange',
+      () => {
+        if (document.visibilityState !== 'visible') return;
+        const pip = getPipMedia();
+        const state = get() as unknown as MediaPipOverlayState;
+        if (!pip || !state.pipOverlayActive || isLive()) return;
+        pip.currentTime = media.currentTime;
+        pip.playbackRate = media.playbackRate;
+      },
+      { signal }
+    );
   },
 });

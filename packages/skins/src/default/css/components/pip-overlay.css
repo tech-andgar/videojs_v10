@@ -89,17 +89,29 @@ media-pip-overlay:focus-within .pip-overlay__close {
 /* Resize Handle (Bottom Right) */
 .pip-overlay__resize {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 2rem;
-  height: 2rem;
+  right: -5px;
+  bottom: -5px;
+  z-index: 11;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  width: 32px;
+  height: 32px;
+  padding: 5px;
   cursor: nwse-resize;
-  /* Visual indicator (optional) */
-  background: linear-gradient(135deg, transparent 50%, rgba(255, 255, 255, 0.3) 50%);
-  opacity: 0;
 }
 
-media-pip-overlay:hover .pip-overlay__resize {
+.pip-overlay__resize::after {
+  width: 12px;
+  height: 12px;
+  content: "";
+  border-right: 2px solid rgba(255, 255, 255, 0.7);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.7);
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+media-pip-overlay:hover .pip-overlay__resize::after {
   opacity: 1;
 }
 
@@ -121,17 +133,25 @@ media-pip-overlay:hover .pip-overlay__resize {
 }
 
 /* Toggle Button Icons */
-media-pip-overlay-toggle [data-pip-overlay-active] svg.pip-overlay-icon-on {
-  display: block;
-}
-media-pip-overlay-toggle [data-pip-overlay-active] svg.pip-overlay-icon-off {
+media-pip-overlay-toggle:not([data-pip-overlay-active]) .media-icon--pip-overlay-exit {
   display: none;
 }
-media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-on {
+media-pip-overlay-toggle[data-pip-overlay-active] .media-icon--pip-overlay-enter {
   display: none;
 }
-media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-off {
-  display: block;
+
+/* Ensure consistent button UI */
+.media-button--pip-overlay {
+  color: white; /* Force white icon color to match others */
+}
+
+.media-button--pip-overlay:hover,
+.media-button--pip-overlay:focus-visible {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.media-button--pip-overlay[data-pip-overlay-active] {
+  color: var(--media-accent-color, #ffda1a); /* Use accent color for active state if desired, or keep it consistent */
 }
 
 /* Touch devices: close button always visible (no hover needed) */
@@ -157,8 +177,8 @@ media-pip-overlay-toggle:not([data-pip-overlay-active]) svg.pip-overlay-icon-off
   }
 
   media-pip-overlay .pip-overlay__close {
-    background: Canvas;
     color: ButtonText;
+    background: Canvas;
     border: 1px solid ButtonText;
   }
 

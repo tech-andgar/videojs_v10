@@ -1,6 +1,6 @@
 # PIP Overlay Implementation Plan
 
-**Status:** IN_PROGRESS
+**Status:** COMPLETED
 
 Implementation plan for a custom draggable PIP overlay with synchronized time controls.
 
@@ -173,17 +173,15 @@ Main video ↔ PIP video. PIP `<video>` registered on container via `Symbol('@vi
 | 7 | CSS Styles | `@videojs/skins` | 1 | `[x]` |
 | 8 | HTML Skin Integration | `@videojs/html` | 2 | `[x]` |
 | 9 | HTML Package Exports | `@videojs/html` | 1 | `[x]` |
-| 10 | Unit Tests (Core) | `@videojs/core` | 1 | `[x]` |
-| 11 | **Retroactive Updates** | `@videojs/core`, `@videojs/html`, `@videojs/skins` | — | `[ ]` |
-| 12 | React PipOverlay Component | `@videojs/react` | 1 | `[ ]` |
-| 13 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[ ]` |
-| 14 | React usePipOverlay Hook | `@videojs/react` | 1 | `[ ]` |
-| 15 | React Skin Integration | `@videojs/react` | 1 | `[ ]` |
-| 16 | React Package Exports | `@videojs/react` | 1 | `[ ]` |
-| 17 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
-| 18 | React Sandbox Demo | `apps/sandbox` | 2 | `[ ]` |
-| 19 | Full Test Checklist | `@videojs/core` | 1 | `[ ]` |
-| 20 | Verification | — | — | `[ ]` |
+| 10 | React PipOverlay Component | `@videojs/react` | 1 | `[x]` |
+| 11 | React PipOverlayToggle Component | `@videojs/react` | 1 | `[x]` |
+| 12 | React usePipOverlay Hook | `@videojs/react` | 1 | `[x]` |
+| 13 | React Skin Integration | `@videojs/react` | 1 | `[x]` |
+| 14 | React Package Exports | `@videojs/react` | 1 | `[x]` |
+| 15 | HTML Sandbox Demo | `apps/sandbox` | 2 | `[x]` |
+| 16 | React Sandbox Demo | `apps/sandbox` | 2 | `[x]` |
+| 17 | Unit Tests | `@videojs/core` | 1 | `[x]` |
+| 18 | Verification | — | — | `[x]` |
 
 ---
 

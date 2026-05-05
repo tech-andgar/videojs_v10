@@ -5,6 +5,7 @@ import { ControlsElement } from '../../ui/controls/controls-element';
 import { ControlsGroupElement } from '../../ui/controls/controls-group-element';
 import { ErrorDialogElement } from '../../ui/error-dialog/error-dialog-element';
 import { PipOverlayElement } from '../../ui/pip-overlay/pip-overlay-element';
+import { PipOverlaySourceButton } from '../../ui/pip-overlay/pip-overlay-source-button';
 import { PipOverlayToggleElement } from '../../ui/pip-overlay/pip-overlay-toggle-element';
 import { PipSourceElement } from '../../ui/pip-overlay/pip-source-element';
 import { SliderBufferElement } from '../../ui/slider/slider-buffer-element';
@@ -72,5 +73,6 @@ export function defineVolumeSlider(): void {
 export function definePipOverlay(): void {
   safeDefine(PipOverlayElement);
   safeDefine(PipOverlayToggleElement);
+  safeDefine(PipOverlaySourceButton);
   safeDefine(PipSourceElement);
 }

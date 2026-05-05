@@ -50,6 +50,7 @@ export class PipOverlayElement extends MediaElement {
 
   constructor() {
     super();
+    this.attachShadow({ mode: 'open' });
 
     // Internal video element
     this.#video = document.createElement('video');
@@ -79,7 +80,22 @@ export class PipOverlayElement extends MediaElement {
     seHandle.className = 'pip-overlay__resize pip-overlay__resize--se';
     seHandle.setAttribute('aria-hidden', 'true');
 
-    this.append(this.#video, this.#closeBtn, this.#gestureBtn, this.#ariaLive, seHandle);
+    // Slot for sources
+    const slot = document.createElement('slot');
+    slot.name = 'pip';
+    slot.addEventListener('slotchange', () => this.#syncSourcesFromChildren());
+
+    this.shadowRoot!.append(this.#video, this.#closeBtn, this.#gestureBtn, this.#ariaLive, seHandle, slot);
+
+    // Apply basic layout styles to shadow root
+    const style = document.createElement('style');
+    style.textContent = `
+      :host { display: none; position: absolute; }
+      :host([data-active]) { display: block; }
+      video { width: 100%; height: 100%; object-fit: cover; }
+      button { cursor: pointer; border: none; background: none; color: white; }
+    `;
+    this.shadowRoot!.append(style);
 
     this.setAttribute('role', 'region');
     this.setAttribute('aria-label', 'Secondary video overlay');
@@ -147,6 +163,7 @@ export class PipOverlayElement extends MediaElement {
     super.willUpdate(changed);
 
     if (changed.has('pipSrc')) {
+      log('pipSrc changed:', this.pipSrc);
       this.#syncSourcesFromChildren(); // Re-eval attributes vs children
     }
 
@@ -168,7 +185,13 @@ export class PipOverlayElement extends MediaElement {
     if (!state) return;
 
     if (state.pipOverlayActive) {
-      log('show → src=%s pos=(%s,%s) scale=%s', state.pipOverlaySrc, state.pipOverlayPosition.x, state.pipOverlayPosition.y, state.pipOverlayScale);
+      log(
+        'show → src=%s pos=(%s,%s) scale=%s',
+        state.pipOverlaySrc,
+        state.pipOverlayPosition.x,
+        state.pipOverlayPosition.y,
+        state.pipOverlayScale
+      );
       this.dataset.active = '';
     } else {
       log('hide');
@@ -221,6 +244,11 @@ export class PipOverlayElement extends MediaElement {
     }
   }
 
+  protected override firstUpdated(changed: PropertyValues): void {
+    super.firstUpdated(changed);
+    this.#syncSourcesFromChildren();
+  }
+
   #registerMedia() {
     const container = this.container.value?.container;
     if (container && !(container as any)[PIP_OVERLAY_MEDIA_SYMBOL]) {
@@ -239,9 +267,17 @@ export class PipOverlayElement extends MediaElement {
     const state = this.pipOverlay.value;
     if (!state) return;
 
-    const sources = Array.from(this.querySelectorAll('pip-source')) as PipSourceElement[];
-    if (sources.length > 0) {
-      state.setPipOverlaySources(sources.map((s) => ({ src: s.src, lang: s.lang, label: s.label })));
+    // Check slotted children (use flatten: true to see through skin slots)
+    const slot = this.shadowRoot!.querySelector('slot[name="pip"]') as HTMLSlotElement | null;
+    const allSources = slot ? (slot.assignedElements({ flatten: true }) as PipSourceElement[]) : [];
+
+    log('syncSourcesFromChildren', {
+      slottedCount: allSources.length,
+      attributeSrc: this.pipSrc,
+    });
+
+    if (allSources.length > 0) {
+      state.setPipOverlaySources(allSources.map((s) => ({ src: s.src, lang: s.lang, label: s.label })));
     } else if (this.pipSrc) {
       state.setPipOverlaySources([{ src: this.pipSrc }]);
     } else {
@@ -267,19 +303,19 @@ export class PipOverlayElement extends MediaElement {
   };
 
   readonly #onPointerDown = (e: PointerEvent) => {
-    if (e.target === this.#closeBtn || e.target === this.#gestureBtn) return;
+    const path = e.composedPath();
+    if (path.includes(this.#closeBtn) || path.includes(this.#gestureBtn)) return;
 
     const state = this.pipOverlay.value;
     if (!state) return;
 
-    const container = this.container.value?.container;
-    if (!container) return;
-
-    const target = e.target as HTMLElement;
-    const isResize = target.classList.contains('pip-overlay__resize');
+    const isResize = path.some((el) => el instanceof HTMLElement && el.classList.contains('pip-overlay__resize'));
 
     this.setPointerCapture(e.pointerId);
     this.#dragPointerId = e.pointerId;
+
+    const container = this.container.value?.container;
+    if (!container) return;
 
     if (isResize) {
       log('resize start');
@@ -321,7 +357,11 @@ export class PipOverlayElement extends MediaElement {
         cancelAnimationFrame(rafId);
         rafId = null;
       }
-      log(isResize ? 'resize end scale=%s' : 'drag end pos=(%s,%s)', isResize ? state.pipOverlayScale : state.pipOverlayPosition.x, isResize ? '' : state.pipOverlayPosition.y);
+      log(
+        isResize ? 'resize end scale=%s' : 'drag end pos=(%s,%s)',
+        isResize ? state.pipOverlayScale : state.pipOverlayPosition.x,
+        isResize ? '' : state.pipOverlayPosition.y
+      );
       this.releasePointerCapture(upEvt.pointerId);
       this.#dragPointerId = null;
       delete this.dataset.dragging;
@@ -400,7 +440,9 @@ export class PipOverlayElement extends MediaElement {
     log('video error code=%s message=%s src=%s', code, message, this.#video.src);
 
     if (__DEV__ && code === MediaError.MEDIA_ERR_DECODE) {
-      console.warn('[pip-overlay] MEDIA_ERR_DECODE on PIP video. On iOS Safari this may indicate the hardware video decoder limit has been reached. Consider reducing concurrent video elements.');
+      console.warn(
+        '[pip-overlay] MEDIA_ERR_DECODE on PIP video. On iOS Safari this may indicate the hardware video decoder limit has been reached. Consider reducing concurrent video elements.'
+      );
     }
 
     const msg = 'Error loading secondary video';

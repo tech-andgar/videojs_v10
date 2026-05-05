@@ -20,6 +20,8 @@
 .media-button--pip .media-icon--pip-exit,
 .media-button--cast .media-icon--cast-enter,
 .media-button--cast .media-icon--cast-exit,
+.media-button--pip-overlay .media-icon--pip-overlay-enter,
+.media-button--pip-overlay .media-icon--pip-overlay-exit,
 .media-button--captions .media-icon--captions-off,
 .media-button--captions .media-icon--captions-on {
   display: none;
@@ -54,6 +56,10 @@
 .media-button--cast[data-cast-state="connected"] .media-icon--cast-exit,
 /* Captions: not active → captions off */
 .media-button--captions:not([data-active]) .media-icon--captions-off,
+/* PIP Overlay: not active → enter */
+.media-button--pip-overlay:not([data-pip-overlay-active]) .media-icon--pip-overlay-enter,
+/* PIP Overlay: active → exit */
+.media-button--pip-overlay[data-pip-overlay-active] .media-icon--pip-overlay-exit,
 /* Captions: active → captions on */
 .media-button--captions[data-active] .media-icon--captions-on {
   display: block;

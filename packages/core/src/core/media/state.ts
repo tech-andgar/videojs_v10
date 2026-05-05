@@ -356,8 +356,8 @@ export interface MediaPictureInPictureState {
 
 export interface PipOverlaySource {
   src: string;
-  lang?: string;
-  label?: string;
+  lang?: string | undefined;
+  label?: string | undefined;
 }
 
 export type PipOverlayLoadingState = 'spinner' | 'black' | 'poster';
@@ -382,8 +382,18 @@ export interface MediaPipOverlayState {
   setPipOverlayPosition(x: number, y: number): void;
   setPipOverlayScale(scale: number): void;
   setPipOverlaySources(sources: PipOverlaySource[]): void;
-  setPipOverlayLang(lang: string): void;
-  setPipOverlayError(error: string): void;
+  setPipOverlayLang(lang: string | null): void;
+  /** Set the current source URL for the PIP overlay. */
+  setPipOverlaySrc(src: string): void;
+
+  /** Add a source to the PIP overlay (for dynamic registration). */
+  addPipOverlaySource(source: PipOverlaySource): void;
+
+  /** Remove a source from the PIP overlay. */
+  removePipOverlaySource(src: string): void;
+
+  /** Set an error message if PIP loading fails. */
+  setPipOverlayError(error: string | null): void;
   dismissPipOverlayError(): void;
   resolvePipOverlayGesture(): void;
 }
