@@ -341,6 +341,57 @@ createRoot(document.getElementById('root')!).render(<App />);
 }
 
 // ---------------------------------------------------------------------------
+// PIP Overlay page templates
+// ---------------------------------------------------------------------------
+
+function htmlPipOverlayPage(resource: string): string {
+  return `import '@videojs/html/video/player';
+import '@videojs/html/video/skin';
+import { MEDIA } from '../resources';
+
+const html = String.raw;
+
+document.getElementById('root')!.innerHTML = html\`
+  <video-player>
+    <video-skin style="max-width: 800px; aspect-ratio: 16/9">
+      <video src="\${MEDIA.${resource}.url}" playsinline crossorigin="anonymous">
+      </video>
+      <img slot="poster" src="\${MEDIA.${resource}.poster}" alt="Video poster" />
+      <pip-source slot="pip" src="\${MEDIA.${resource}.url}" label="Primary" lang="en"></pip-source>
+      <pip-source slot="pip" src="\${MEDIA.${resource}.url}" label="Secondary" lang="es"></pip-source>
+    </video-skin>
+  </video-player>
+\`;
+`;
+}
+
+function reactPipOverlayPage(resource: string): string {
+  return `import { createPlayer } from '@videojs/react';
+import { PipSource, Video, VideoSkin, videoFeatures } from '@videojs/react/video';
+import '@videojs/react/video/skin.css';
+import { createRoot } from 'react-dom/client';
+import { MEDIA } from '../resources';
+
+const Player = createPlayer({ features: videoFeatures });
+
+function App() {
+  return (
+    <Player.Provider>
+      <VideoSkin style={{ maxWidth: 800, aspectRatio: '16/9' }}>
+        <Video src={MEDIA.${resource}.url} playsInline crossOrigin="anonymous">
+          <PipSource src={MEDIA.${resource}.url} label="Primary" lang="en" />
+          <PipSource src={MEDIA.${resource}.url} label="Secondary" lang="es" />
+        </Video>
+      </VideoSkin>
+    </Player.Provider>
+  );
+}
+
+createRoot(document.getElementById('root')!).render(<App />);
+`;
+}
+
+// ---------------------------------------------------------------------------
 // Page definitions (drive generation from here)
 // ---------------------------------------------------------------------------
 
@@ -414,6 +465,24 @@ const PAGES: PageDef[] = [
     resource: 'mp4',
     category: 'ejected-react',
   },
+
+  // PIP Overlay
+  {
+    name: 'HTML PIP Overlay',
+    path: 'html-pip-overlay',
+    framework: 'html',
+    media: 'video',
+    resource: 'mp4',
+    category: 'pip-overlay',
+  },
+  {
+    name: 'React PIP Overlay',
+    path: 'react-pip-overlay',
+    framework: 'react',
+    media: 'video',
+    resource: 'mp4',
+    category: 'pip-overlay',
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -452,6 +521,8 @@ function generatePage(page: PageDef): { ts: string; html: string; ext: string } 
     ts = ejectedHtmlPage();
   } else if (page.category === 'ejected-react') {
     ts = ejectedReactPage(page.resource);
+  } else if (page.category === 'pip-overlay') {
+    ts = page.framework === 'react' ? reactPipOverlayPage(page.resource) : htmlPipOverlayPage(page.resource);
   } else if (page.framework === 'react') {
     ts = config.isAudio ? reactAudioPage(page.media, page.resource) : reactVideoPage(page.media, page.resource, config);
   } else {
@@ -473,6 +544,7 @@ function generateIndexHtml(pages: PageDef[]): string {
   const cdn = pages.filter((p) => p.category === 'cdn');
   const ejected = pages.filter((p) => p.category?.startsWith('ejected'));
   const captions = pages.filter((p) => p.category === 'captions');
+  const pipOverlay = pages.filter((p) => p.category === 'pip-overlay');
 
   function list(entries: PageDef[]): string {
     return entries.map((p) => `        <li><a href="/pages/${p.path}.html">${p.name}</a></li>`).join('\n');
@@ -498,6 +570,10 @@ ${list(captions)}
       <ul>
 ${list(reactVideo)}
 ${list(reactAudio)}
+      </ul>
+      <h2>PIP Overlay</h2>
+      <ul>
+${list(pipOverlay)}
       </ul>
       <h2>Ejected Skins</h2>
       <ul>

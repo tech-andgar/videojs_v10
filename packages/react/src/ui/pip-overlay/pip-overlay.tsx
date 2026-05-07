@@ -14,7 +14,7 @@ export interface PipOverlayProps extends UIComponentProps<'div', undefined> {
    * Default source URL.
    * For multiple sources, use `<PipSource />` children.
    */
-  pipSrc?: string;
+  pipSrc?: string | undefined;
   /** CORS setting for the secondary video. */
   crossOrigin?: string;
 }

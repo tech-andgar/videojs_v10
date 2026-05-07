@@ -266,7 +266,7 @@ export const pipOverlayFeature = definePlayerFeature({
         if (document.visibilityState !== 'visible') return;
         const pip = getPipMedia();
         const state = get() as unknown as MediaPipOverlayState;
-        if (!pip || !state.pipOverlayActive || isLive()) return;
+        if (!pip || !state.pipOverlayActive || isLive() || !isMediaPlaybackRateCapable(media)) return;
         pip.currentTime = media.currentTime;
         pip.playbackRate = media.playbackRate;
       },

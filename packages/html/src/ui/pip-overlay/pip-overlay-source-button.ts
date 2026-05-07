@@ -1,33 +1,28 @@
 import type { MediaPipOverlayState } from '@videojs/core';
+import type { AnyPlayerStore } from '@videojs/core/dom';
 import { selectPipOverlay } from '@videojs/core/dom';
 import type { PropertyValues } from '@videojs/element';
 
+import { playerContext } from '../../player/context';
 import { PlayerController } from '../../player/player-controller';
-import { MediaUIElement } from '../media-ui-element';
+import { MediaElement } from '../media-element';
 
 /**
  * Button that cycles through PIP overlay sources.
  */
-export class PipOverlaySourceButton extends MediaUIElement<any> {
+export class PipOverlaySourceButton extends MediaElement {
   static readonly tagName = 'media-pip-overlay-source-button';
 
-  protected readonly core = {
-    setMedia: () => {},
-    getState: () => ({}),
-  } as any;
-
-  protected readonly stateAttrMap = {};
-
-  protected readonly pipOverlay = new PlayerController(this, selectPipOverlay);
-  protected readonly mediaState = new PlayerController(this, (state) => state);
+  protected readonly pipOverlay: PlayerController<AnyPlayerStore, MediaPipOverlayState | undefined> =
+    new PlayerController(this, playerContext, selectPipOverlay);
 
   constructor() {
     super();
     this.addEventListener('click', () => this.#handleClick());
   }
 
-  protected override update(changed: PropertyValues): void {
-    super.update(changed);
+  protected override update(_changed: PropertyValues): void {
+    super.update(_changed);
     const state = this.pipOverlay.value;
     if (!state || state.pipOverlaySources.length <= 1) {
       this.style.display = 'none';

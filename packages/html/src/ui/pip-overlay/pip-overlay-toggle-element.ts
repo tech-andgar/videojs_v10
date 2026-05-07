@@ -34,7 +34,8 @@ export class PipOverlayToggleElement extends MediaElement {
     this.addEventListener('keydown', this.#onKeyDown);
 
     // Register with the PIP overlay for focus management
-    const overlay = this.closest('[class*="media"]')?.querySelector('media-pip-overlay') ??
+    const overlay =
+      this.closest('[class*="media"]')?.querySelector('media-pip-overlay') ??
       this.parentElement?.querySelector('media-pip-overlay');
     if (overlay && 'setToggleButton' in overlay) {
       (overlay as any).setToggleButton(this);

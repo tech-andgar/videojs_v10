@@ -44,6 +44,12 @@ export const SELECTORS = {
   bufferingIndicator: 'media-buffering-indicator, .media-buffering-indicator',
   thumbnail: 'media-slider-thumbnail, .media-preview__thumbnail',
 
+  // PIP Overlay
+  // HTML: <media-pip-overlay>, React: <section aria-label="Secondary video overlay">
+  pipOverlay: 'media-pip-overlay, [aria-label="Secondary video overlay"]',
+  pipOverlayToggle: 'media-pip-overlay-toggle, .media-button--pip-overlay',
+  pipOverlaySourceButton: 'media-pip-overlay-source-button, .media-button--pip-source',
+
   // Popover & tooltip
   tooltip: 'media-tooltip, .media-tooltip',
   popover: 'media-popover, .media-popover',
@@ -77,4 +83,5 @@ export const DATA_ATTRS = {
   hidden: 'data-hidden',
   open: 'data-open',
   userActive: 'data-user-active',
+  pipOverlayActive: 'data-pip-overlay-active',
 } as const;

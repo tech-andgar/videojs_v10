@@ -90,6 +90,18 @@ export class PlayerPage {
     return this.page.locator(SELECTORS.popover).first();
   }
 
+  get pipOverlay(): Locator {
+    return this.page.locator(SELECTORS.pipOverlay).first();
+  }
+
+  get pipOverlayToggle(): Locator {
+    return this.page.locator(SELECTORS.pipOverlayToggle).first();
+  }
+
+  get pipOverlaySourceButton(): Locator {
+    return this.page.locator(SELECTORS.pipOverlaySourceButton).first();
+  }
+
   /** Locator for the outermost player wrapper (works for both video and audio). */
   get playerRoot(): Locator {
     return this.page.locator(SELECTORS.container).first();

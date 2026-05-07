@@ -11,4 +11,5 @@ export type BaseSkinProps<T = unknown> = PropsWithChildren<
 
 export type BaseVideoSkinProps<T = unknown> = BaseSkinProps<T> & {
   poster?: string | RenderProp<Poster.State> | undefined;
+  pipSrc?: string | undefined;
 };

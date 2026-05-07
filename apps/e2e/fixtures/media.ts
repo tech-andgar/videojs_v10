@@ -138,4 +138,21 @@ export const CDN_VIDEO_PAGES = [
 // Combined arrays for parameterized tests
 // ---------------------------------------------------------------------------
 
+export const PIP_OVERLAY_PAGES = [
+  {
+    name: 'HTML PIP Overlay',
+    path: '/pages/html-pip-overlay.html',
+    framework: 'html',
+    media: 'video',
+    resource: 'mp4',
+  },
+  {
+    name: 'React PIP Overlay',
+    path: '/pages/react-pip-overlay.html',
+    framework: 'react',
+    media: 'video',
+    resource: 'mp4',
+  },
+] as const satisfies readonly PageEntry[];
+
 export const ALL_VIDEO_PAGES = [...VIDEO_PAGES, ...EJECTED_VIDEO_PAGES, ...CDN_VIDEO_PAGES] as const;
